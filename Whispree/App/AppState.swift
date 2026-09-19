@@ -127,7 +127,10 @@ final class AppState: ObservableObject {
             let spec = LocalModelSpec.find(settings.llmModelId)
             let provider: any LLMProvider
             if spec?.runtime == .python {
-                provider = MLXLMPythonProvider(modelId: settings.llmModelId) { [weak self] phase in
+                provider = MLXLMPythonProvider(
+                    modelId: settings.llmModelId,
+                    revision: spec?.revision ?? ""
+                ) { [weak self] phase in
                     guard let self else { return }
                     switch phase {
                     case .uvSync:
@@ -139,7 +142,10 @@ final class AppState: ObservableObject {
                     }
                 }
             } else {
-                provider = LocalTextProvider(modelId: settings.llmModelId)
+                provider = LocalTextProvider(
+                    modelId: settings.llmModelId,
+                    revision: spec?.revision
+                )
             }
             llmProvider = provider
             do {
