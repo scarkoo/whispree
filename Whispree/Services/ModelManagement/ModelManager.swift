@@ -218,7 +218,7 @@ final class ModelManager: ObservableObject {
         return false
     }
 
-    /// WhisperKit 모델 캐시 판정 — 자체 포맷 사용 (~/Documents/huggingface/models/...)
+    /// WhisperKit 모델 캐시 판정 — immutable revision 전용 Application Support 경로 사용.
     nonisolated static func isWhisperKitCached() -> Bool {
         let fm = FileManager.default
         let base = WhisperKitProvider.pinnedModelDownloadBase
@@ -464,9 +464,9 @@ final class ModelManager: ObservableObject {
         whisperModelInfo.state = .notDownloaded
         appState.whisperModelState = .notDownloaded
         modelCacheStates[Self.whisperKitRepoId] = false
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("huggingface")
-        try? FileManager.default.removeItem(at: cacheDir)
+        let fm = FileManager.default
+        try? fm.removeItem(at: WhisperKitProvider.pinnedModelDownloadBase)
+        try? fm.removeItem(at: WhisperKitProvider.pinnedTokenizerDownloadBase)
     }
 
     func deleteLLMModel() {
