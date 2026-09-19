@@ -14,15 +14,6 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Whispree needs microphone access to record your voice for local transcription.</string>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>com.scarkoo.whispree</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>whispree</string>
-            </array>
         </dict>
     </array>
 </dict>
