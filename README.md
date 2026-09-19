@@ -17,7 +17,7 @@ Removed from this fork:
 - Sparkle auto-update and the upstream release pipeline
 - the upstream signing team and bundle identifier
 
-The app does not include an analytics or telemetry client. Network access remains enabled because model and package downloads require it. After models and Python dependencies are installed, normal transcription and correction do not send audio or text to a remote inference service.
+The app does not include an analytics or telemetry client, cloud inference provider, external recording URL scheme, or network entitlement. Model downloads still require outbound networking at the application/library level because this fork is not App-Sandboxed; after models and Python dependencies are installed, normal transcription and correction do not send audio or text to a remote inference service.
 
 ## Local providers
 
