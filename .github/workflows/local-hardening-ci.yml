@@ -1,34 +1,40 @@
-name: Harden local fork and generate locks
+name: Verify local-only hardening
 
 on:
   push:
     branches:
       - security/local-only-hardening
+  pull_request:
+    branches:
+      - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: local-hardening-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify-and-lock:
+  verify-local-only:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: security/local-only-hardening
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Install build tools
-        run: |
-          brew install xcodegen uv
+        run: brew install xcodegen uv
 
-      - name: Generate Python lockfile
+      - name: Verify Python dependency lock
         run: |
           cd mlx-worker
-          uv lock
+          uv lock --check
+
+      - name: Preserve committed SwiftPM lock
+        run: |
+          test -f Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          cp Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved "$RUNNER_TEMP/Package.resolved"
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -44,27 +50,15 @@ jobs:
             -scheme Whispree \
             -resolvePackageDependencies
 
-      - name: Commit reproducibility files
+      - name: Verify SwiftPM lock is unchanged
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add mlx-worker/uv.lock Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-          if ! git diff --cached --quiet; then
-            git commit -m "build: lock local dependencies [skip ci]"
-            git push origin HEAD:security/local-only-hardening
-          fi
-
-      - name: Verify lockfiles exist
-        run: |
-          test -f mlx-worker/uv.lock
-          test -f Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          cmp "$RUNNER_TEMP/Package.resolved" Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Build local-only app
         run: |
-          # mlx-swift-lm uses a Swift macro target (MLXHuggingFaceMacros).
-          # GitHub-hosted runners cannot interactively approve macro trust.
-          # Dependencies are exact/revision pinned and Package.resolved is tracked,
-          # so skip only macro validation here. Package plugin validation remains enabled.
+          # mlx-swift-lm contains a pinned Swift macro target. Hosted CI cannot
+          # interactively approve macro trust, so only macro validation is skipped.
+          # Package plugin validation remains enabled.
           xcodebuild -project Whispree.xcodeproj \
             -scheme Whispree \
             -destination 'platform=macOS,arch=arm64' \
@@ -75,5 +69,4 @@ jobs:
             build
 
       - name: Validate Python sources
-        run: |
-          python3 -m py_compile mlx-worker/mlx_worker.py mlx-worker/mlx_llm_worker.py
+        run: python3 -m py_compile mlx-worker/mlx_worker.py mlx-worker/mlx_llm_worker.py
