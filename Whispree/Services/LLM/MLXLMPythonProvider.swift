@@ -133,7 +133,7 @@ final class MLXLMPythonProvider: LLMProvider {
         let stdout = Pipe()
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: uvPath)
-        proc.arguments = ["run", "python", "mlx_llm_worker.py"]
+        proc.arguments = ["run", "--frozen", "python", "mlx_llm_worker.py"]
         proc.currentDirectoryURL = URL(fileURLWithPath: workerPath)
         proc.standardInput = stdin
         proc.standardOutput = stdout
