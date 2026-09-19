@@ -5,11 +5,11 @@ struct ModelSettingsView: View {
     @EnvironmentObject var modelManager: ModelManager
 
     private let device = DeviceCapability.current
+    private let llmSpec = LocalModelSpec.qwen3_8B
 
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Device Info — inline pills
                 HStack(spacing: 10) {
                     modelInfoPill(device.chipName, systemImage: "cpu")
                     modelInfoPill("\(device.totalRAMGB) GB", systemImage: "memorychip")
@@ -17,97 +17,65 @@ struct ModelSettingsView: View {
                     modelInfoPill("\(device.gpuCores) cores", systemImage: "gpu")
                 }
 
-                // STT Models
                 LiquidSection("STT 모델") {
-                    VStack(spacing: 0) {
-                        let whisperCompat = ModelCompatibility.evaluate(modelSizeBytes: 1_500_000_000)
-                        DownloadableModelRow(
-                            name: "WhisperKit Large V3 Turbo",
-                            description: "로컬 CoreML+ANE, 99개 언어",
-                            metrics: .local(size: "~1.5 GB", ramPercent: whisperCompat.ramUsagePercent, tokPerSec: nil, qualityScore: 75, grade: whisperCompat.grade),
-                            state: modelManager.whisperKitDownloaded ? .ready : activeWhisperKitState,
-                            onDownload: { Task { await modelManager.downloadWhisperKitModel() } },
-                            onDelete: { modelManager.deleteWhisperModel() }
-                        )
-
-                        Divider()
-
-                        let mlxCompat = ModelCompatibility.evaluate(modelSizeBytes: 1_000_000_000)
-                        DownloadableModelRow(
-                            name: "Qwen3-ASR-1.7B-8bit",
-                            description: "mlx-audio, 한중일영 (uv 필요)",
-                            metrics: .local(size: "~1.0 GB", ramPercent: mlxCompat.ramUsagePercent, tokPerSec: nil, qualityScore: 65, grade: mlxCompat.grade),
-                            state: modelManager.mlxAudioDownloaded ? .ready : modelManager.mlxAudioDownloadState,
-                            onDownload: { Task { await modelManager.downloadMLXAudioModel() } },
-                            onDelete: { modelManager.deleteMLXAudioModel() }
-                        )
-                    }
+                    let whisperCompat = ModelCompatibility.evaluate(modelSizeBytes: 1_500_000_000)
+                    DownloadableModelRow(
+                        name: "WhisperKit Large V3 Turbo",
+                        description: "고정 revision · 로컬 CoreML + ANE",
+                        metrics: .local(
+                            size: "~1.5 GB",
+                            ramPercent: whisperCompat.ramUsagePercent,
+                            tokPerSec: nil,
+                            qualityScore: 75,
+                            grade: whisperCompat.grade
+                        ),
+                        state: modelManager.whisperKitDownloaded ? .ready : activeWhisperKitState,
+                        onDownload: { Task { await modelManager.downloadWhisperKitModel() } },
+                        onDelete: { modelManager.deleteWhisperModel() }
+                    )
                 }
 
-                // LLM Models
                 LiquidSection("LLM 모델") {
-                    let sttOverhead: Int64 = {
-                        switch appState.settings.sttProviderType {
-                        case .whisperKit: return 1_500_000_000
-                        case .mlxAudio: return 1_000_000_000
+                    let compat = llmSpec.compatibility(otherModelSizeBytes: 1_500_000_000)
+                    let state: ModelState = {
+                        if modelManager.localLLMDownloaded { return .ready }
+                        if modelManager.queuedModelIds.contains(llmSpec.id) { return .queued }
+                        if modelManager.downloadingModelIds.contains(llmSpec.id) {
+                            if let progress = modelManager.downloadProgress[llmSpec.id] {
+                                return .downloading(progress: progress)
+                            }
+                            return .loading
                         }
+                        if let error = modelManager.modelErrors[llmSpec.id] {
+                            return .error(error)
+                        }
+                        return .notDownloaded
                     }()
 
-                    VStack(spacing: 0) {
-                        ForEach(Array(LocalModelSpec.supported.enumerated()), id: \.element.id) { index, spec in
-                            if index > 0 { Divider() }
-
-                            let isCached = modelManager.modelCacheStates[spec.id] ?? false
-                            let isDownloading = modelManager.downloadingModelIds.contains(spec.id)
-                            // "사용 중" 뱃지는 현재 provider가 local일 때만 — OpenAI 쓰는데 last-selected MLX가 "사용 중"으로 뜨는 버그 방지
-                            let isSelected = appState.settings.llmProviderType == .local
-                                && appState.settings.llmModelId == spec.id
-                            let errorMsg = modelManager.modelErrors[spec.id]
-                            let compat = spec.compatibility(otherModelSizeBytes: sttOverhead)
-
-                            let isQueued = modelManager.queuedModelIds.contains(spec.id)
-                            let bytes = modelManager.downloadedBytes[spec.id]
-
-                            let state: ModelState = {
-                                if isCached { return .ready }
-                                if isQueued { return .queued }
-                                if isDownloading {
-                                    if let p = modelManager.downloadProgress[spec.id] {
-                                        return .downloading(progress: p)
-                                    }
-                                    return .loading
-                                }
-                                if let err = errorMsg { return .error(err) }
-                                return .notDownloaded
-                            }()
-
-                            DownloadableModelRow(
-                                name: spec.displayName,
-                                description: spec.description,
-                                metrics: .local(
-                                    size: spec.sizeDescription,
-                                    ramPercent: compat.ramUsagePercent,
-                                    tokPerSec: compat.estimatedTokPerSec,
-                                    qualityScore: spec.qualityScore,
-                                    grade: compat.grade
-                                ),
-                                state: state,
-                                isSelected: isSelected,
-                                downloadedBytes: bytes,
-                                totalBytes: spec.sizeBytes,
-                                onDownload: { Task { await modelManager.downloadLLMModel(modelId: spec.id) } },
-                                onCancel: { modelManager.cancelLLMDownload(modelId: spec.id) },
-                                onDelete: { modelManager.deleteLLMModel(modelId: spec.id) }
-                            )
-                        }
-                    }
+                    DownloadableModelRow(
+                        name: llmSpec.displayName,
+                        description: "고정 revision · Swift MLX 전용",
+                        metrics: .local(
+                            size: llmSpec.sizeDescription,
+                            ramPercent: compat.ramUsagePercent,
+                            tokPerSec: compat.estimatedTokPerSec,
+                            qualityScore: llmSpec.qualityScore,
+                            grade: compat.grade
+                        ),
+                        state: state,
+                        isSelected: appState.settings.llmProviderType == .local,
+                        downloadedBytes: modelManager.downloadedBytes[llmSpec.id],
+                        totalBytes: llmSpec.sizeBytes,
+                        onDownload: { Task { await modelManager.downloadLLMModel(modelId: llmSpec.id) } },
+                        onCancel: { modelManager.cancelLLMDownload(modelId: llmSpec.id) },
+                        onDelete: { modelManager.deleteLLMModel(modelId: llmSpec.id) }
+                    )
                 }
 
-                // Storage
                 LiquidSection("저장 공간") {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("모델 위치:")
+                            Text("MLX 모델 위치:")
                             Spacer()
                             Text("~/.cache/huggingface/hub/")
                                 .font(.caption)
@@ -132,18 +100,15 @@ struct ModelSettingsView: View {
 
     private var activeWhisperKitState: ModelState {
         let whisperKey = "argmaxinc/whisperkit-coreml"
-        if let p = modelManager.downloadProgress[whisperKey] {
-            return .downloading(progress: p)
+        if let progress = modelManager.downloadProgress[whisperKey] {
+            return .downloading(progress: progress)
         }
-        if appState.settings.sttProviderType == .whisperKit {
-            if case .downloading = appState.whisperModelState { return appState.whisperModelState }
-            if case .loading = appState.whisperModelState { return appState.whisperModelState }
-        }
+        if case .downloading = appState.whisperModelState { return appState.whisperModelState }
+        if case .loading = appState.whisperModelState { return appState.whisperModelState }
         if modelManager.isWhisperKitDownloading { return .loading }
         return .notDownloaded
     }
 
-    @ViewBuilder
     private func modelInfoPill(_ text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
             .font(.caption)
@@ -153,13 +118,9 @@ struct ModelSettingsView: View {
     }
 }
 
-// MARK: - ModelMetrics
-
 enum ModelMetrics {
     case local(size: String, ramPercent: Int, tokPerSec: Int?, qualityScore: Int, grade: CompatibilityGrade)
 }
-
-// MARK: - DownloadableModelRow (no nested background)
 
 struct DownloadableModelRow: View {
     let name: String
@@ -180,7 +141,6 @@ struct DownloadableModelRow: View {
                     HStack(spacing: 6) {
                         Text(name)
                             .font(.subheadline.weight(.medium))
-
                         if isSelected {
                             Text("사용 중")
                                 .font(.caption2.weight(.medium))
@@ -211,11 +171,14 @@ struct DownloadableModelRow: View {
         case .queued:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("다운로드 대기 중...").font(.caption).foregroundStyle(.secondary)
+                Text("다운로드 대기 중...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 if let onCancel {
                     Button("취소", role: .cancel) { onCancel() }
-                        .font(.caption).controlSize(.small)
+                        .font(.caption)
+                        .controlSize(.small)
                 }
             }
         case let .downloading(progress):
@@ -223,48 +186,51 @@ struct DownloadableModelRow: View {
                 ProgressView(value: progress)
                 HStack {
                     Text(progressLabel(progress: progress))
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Spacer()
                     if let onCancel {
                         Button("취소", role: .cancel) { onCancel() }
-                            .font(.caption).controlSize(.small)
+                            .font(.caption)
+                            .controlSize(.small)
                     }
                 }
             }
         case .loading:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("로딩 중...").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                if let onCancel {
-                    Button("취소", role: .cancel) { onCancel() }
-                        .font(.caption).controlSize(.small)
-                }
+                Text("로딩 중...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         case .ready:
             HStack {
                 Label("준비됨", systemImage: "checkmark.circle.fill")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Button("삭제", role: .destructive) { onDelete() }
-                    .font(.caption).controlSize(.small)
+                    .font(.caption)
+                    .controlSize(.small)
             }
-        case let .error(msg):
+        case let .error(message):
             HStack {
-                Label(msg, systemImage: "exclamationmark.triangle.fill")
+                Label(message, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(DesignTokens.semanticColors(for: .danger).foreground)
-                    .font(.caption).lineLimit(2)
+                    .font(.caption)
+                    .lineLimit(2)
                 Spacer()
                 Button("재시도") { onDownload() }
-                    .font(.caption).controlSize(.small)
+                    .font(.caption)
+                    .controlSize(.small)
             }
         }
     }
 
-    /// "31 MB / 6.9 GB (0.5%) 다운로드 중..." — 소수점 %로 < 1% 구간도 표시.
     private func progressLabel(progress: Double) -> String {
-        let pct = progress < 0.01 ? String(format: "%.1f%%", progress * 100)
-                                  : String(format: "%d%%", Int(progress * 100))
+        let pct = progress < 0.01
+            ? String(format: "%.1f%%", progress * 100)
+            : String(format: "%d%%", Int(progress * 100))
         if let downloaded = downloadedBytes, let total = totalBytes, total > 0 {
             return "\(formatBytes(downloaded)) / \(formatBytes(total)) (\(pct)) 다운로드 중..."
         }
@@ -272,10 +238,10 @@ struct DownloadableModelRow: View {
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
-        let fmt = ByteCountFormatter()
-        fmt.allowedUnits = [.useMB, .useGB]
-        fmt.countStyle = .file
-        return fmt.string(fromByteCount: bytes)
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 
     @ViewBuilder
@@ -283,9 +249,12 @@ struct DownloadableModelRow: View {
         switch metrics {
         case let .local(size, ramPercent, tokPerSec, qualityScore, grade):
             ModelMetricsView(
-                sizeText: size, ramPercent: ramPercent,
-                tokPerSec: tokPerSec, latencyMs: nil,
-                qualityScore: qualityScore, grade: grade
+                sizeText: size,
+                ramPercent: ramPercent,
+                tokPerSec: tokPerSec,
+                latencyMs: nil,
+                qualityScore: qualityScore,
+                grade: grade
             )
         }
     }
