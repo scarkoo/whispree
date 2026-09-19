@@ -59,17 +59,6 @@ targets:
           - "Views/ScreenshotSelectionView.swift"
     resources:
       - path: Whispree/Resources/Assets.xcassets
-    postBuildScripts:
-      - script: |
-          DEST="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/mlx-worker"
-          mkdir -p "$DEST"
-          cp "${SRCROOT}/mlx-worker/mlx_worker.py" "$DEST/"
-          cp "${SRCROOT}/mlx-worker/mlx_llm_worker.py" "$DEST/"
-          cp "${SRCROOT}/mlx-worker/pyproject.toml" "$DEST/"
-          if [ -f "${SRCROOT}/mlx-worker/uv.lock" ]; then
-            cp "${SRCROOT}/mlx-worker/uv.lock" "$DEST/"
-          fi
-        name: Copy mlx-worker to bundle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.scarkoo.whispree
