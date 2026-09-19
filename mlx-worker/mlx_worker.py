@@ -23,8 +23,11 @@ def _error(msg: str):
 
 
 def handle_load(model_id: str, revision: str):
-    """Load an mlx-audio STT model."""
+    """Load an mlx-audio STT model at an immutable reviewed revision."""
     global _model, _model_id
+    if not revision:
+        _error("Pinned model revision is required")
+        return
     try:
         from mlx_audio.stt.utils import load
 
