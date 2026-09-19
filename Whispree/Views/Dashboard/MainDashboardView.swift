@@ -118,12 +118,8 @@ struct MainDashboardView: View {
             HStack {
                 Label("STT", systemImage: "mic.fill")
                 Spacer()
-                Picker("", selection: sttBinding) {
-                    ForEach(STTProviderType.allCases, id: \.self) { type in
-                        Text(type.displayName).tag(type)
-                    }
-                }
-                .frame(width: 190)
+                Text("WhisperKit Large V3 Turbo")
+                    .foregroundStyle(.secondary)
             }
 
             Divider()
@@ -132,17 +128,14 @@ struct MainDashboardView: View {
                 Label("LLM", systemImage: "text.badge.checkmark")
                 Spacer()
                 Picker("", selection: llmBinding) {
-                    ForEach(LLMProviderType.allCases, id: \.self) { type in
-                        Text(type.displayName).tag(type)
-                    }
+                    Text("사용 안 함").tag(LLMProviderType.none)
+                    Text("Qwen3 8B (로컬)").tag(LLMProviderType.local)
                 }
                 .frame(width: 190)
             }
 
-            if appState.settings.llmProviderType == .local,
-               let spec = LocalModelSpec.find(appState.settings.llmModelId)
-            {
-                Text("LLM: \(spec.displayName)")
+            if appState.settings.llmProviderType == .local {
+                Text("LLM: \(LocalModelSpec.qwen3_8B.displayName)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -164,16 +157,6 @@ struct MainDashboardView: View {
         }
         .padding(12)
         .background(DesignTokens.surfaceBackgroundView(role: .inset, cornerRadius: 18))
-    }
-
-    private var sttBinding: Binding<STTProviderType> {
-        Binding(
-            get: { appState.settings.sttProviderType },
-            set: { type in
-                appState.settings.sttProviderType = type
-                Task { await appState.switchSTTProvider(to: type) }
-            }
-        )
     }
 
     private var llmBinding: Binding<LLMProviderType> {
