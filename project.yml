@@ -20,6 +20,9 @@ packages:
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm
     revision: 7e2b710
+  mlx-swift:
+    url: https://github.com/ml-explore/mlx-swift
+    exactVersion: "0.31.3"
   swift-huggingface:
     url: https://github.com/huggingface/swift-huggingface
     exactVersion: "0.9.0"
