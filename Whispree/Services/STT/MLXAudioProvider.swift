@@ -10,6 +10,7 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
 
     private var _isReady = false
     private let modelId: String
+    private let revision: String
     private let workerPath: String
 
     func validate() -> ProviderValidation {
@@ -21,9 +22,9 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
         let home = fm.homeDirectoryForCurrentUser.path
 
         let candidatePaths = [
-            "\(home)/.local/bin/uv",  // 공식 스크립트 기본 경로
             "/opt/homebrew/bin/uv",   // Apple Silicon Homebrew
-            "/usr/local/bin/uv"       // Intel Homebrew
+            "/usr/local/bin/uv",      // Intel Homebrew
+            "\(home)/.local/bin/uv"  // 공식 스크립트 기본 경로
         ]
 
         for path in candidatePaths {
@@ -39,44 +40,48 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
         Self.findUvPath() != nil
     }
 
-    init(modelId: String = "mlx-community/Qwen3-ASR-1.7B-8bit") {
+    init(
+        modelId: String = "mlx-community/Qwen3-ASR-1.7B-8bit",
+        revision: String = "a8379a2e2f9e313c9292cdf1af4055ab56d50d55"
+    ) {
         self.modelId = modelId
+        self.revision = revision
         workerPath = Self.resolveWorkerPath()
     }
 
     private static func resolveWorkerPath() -> String {
         let fm = FileManager.default
-
-        // 1. Application Support (쓰기 가능한 런타임 경로)
         let appSupportURL = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Whispree/mlx-worker")
         let appSupportPath = appSupportURL.path
 
-        if fm.fileExists(atPath: appSupportPath + "/mlx_worker.py") {
-            return appSupportPath
-        }
-
-        // 2. 번들에서 Application Support로 복사
+        // Never execute a stale user-writable worker when a signed bundled copy exists.
         if let bundlePath = Bundle.main.resourcePath.map({ $0 + "/mlx-worker" }),
            fm.fileExists(atPath: bundlePath + "/mlx_worker.py")
         {
-            try? fm.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
-            for file in ["mlx_worker.py", "pyproject.toml", "uv.lock"] {
-                let src = bundlePath + "/" + file
-                let dst = appSupportPath + "/" + file
-                try? fm.removeItem(atPath: dst)
-                try? fm.copyItem(atPath: src, toPath: dst)
+            do {
+                try fm.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
+                for file in ["mlx_worker.py", "mlx_llm_worker.py", "pyproject.toml", "uv.lock"] {
+                    let src = bundlePath + "/" + file
+                    let dst = appSupportPath + "/" + file
+                    guard fm.fileExists(atPath: src) else { continue }
+                    try? fm.removeItem(atPath: dst)
+                    try fm.copyItem(atPath: src, toPath: dst)
+                    guard fm.contentsEqual(atPath: src, andPath: dst) else {
+                        return appSupportPath + "/.invalid-worker-copy"
+                    }
+                }
+                return appSupportPath
+            } catch {
+                return appSupportPath + "/.invalid-worker-copy"
             }
-            return appSupportPath
         }
 
-        // 3. 개발 모드 — 프로젝트 디렉토리
         let devPath = fm.currentDirectoryPath + "/mlx-worker"
         if fm.fileExists(atPath: devPath + "/mlx_worker.py") {
             return devPath
         }
-
-        return appSupportPath // fallback
+        return appSupportPath + "/.missing-worker"
     }
 
     func setup() async throws {
@@ -128,7 +133,7 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
         }
 
         // 모델 로드
-        try sendCommand(["cmd": "load", "model": modelId])
+        try sendCommand(["cmd": "load", "model": modelId, "revision": revision])
         let loadResponse = try await readResponse(timeout: 120) // 모델 다운로드 포함 시 오래 걸릴 수 있음
         guard loadResponse["ok"] as? Bool == true else {
             let error = loadResponse["error"] as? String ?? "Unknown error"
