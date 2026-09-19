@@ -302,7 +302,7 @@ final class AudioService: ObservableObject {
     /// 녹음된 버퍼에서 무음 구간을 제거.
     /// - 100ms 프레임 단위로 RMS 계산 → threshold 이상 프레임만 "active"로 판정.
     /// - 연속된 active 프레임을 하나의 세그먼트로 묶고, 앞뒤 `paddingMs`만큼 패딩.
-    /// - WhisperKit/Groq/MLX Audio 공통 pre-processing으로 사용.
+    /// - 고정 WhisperKit STT의 공통 pre-processing으로 사용.
     ///
     /// - Parameters:
     ///   - audio: 16kHz mono Float 버퍼
