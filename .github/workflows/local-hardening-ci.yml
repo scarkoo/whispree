@@ -27,10 +27,11 @@ jobs:
       - name: Install build tools
         run: brew install xcodegen
 
-      - name: Preserve committed SwiftPM lock
+      - name: Preserve committed SwiftPM pins
         run: |
-          test -f Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-          cp Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved "$RUNNER_TEMP/Package.resolved"
+          LOCK=Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          test -f "$LOCK"
+          plutil -extract pins json -o "$RUNNER_TEMP/pins-before.json" "$LOCK"
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -48,15 +49,13 @@ jobs:
 
       - name: Verify SwiftPM pins are unchanged
         run: |
-          python3 - <<'PY'
-          import json, os
-          before = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "Package.resolved")))
-          after = json.load(open("Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"))
-          def pins(doc):
-              return sorted(doc.get("pins", []), key=lambda item: item["identity"])
-          if pins(before) != pins(after):
-              raise SystemExit("SwiftPM resolved pins changed; update and review Package.resolved locally")
-          PY
+          LOCK=Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          plutil -extract pins json -o "$RUNNER_TEMP/pins-after.json" "$LOCK"
+          if ! cmp -s "$RUNNER_TEMP/pins-before.json" "$RUNNER_TEMP/pins-after.json"; then
+            echo "SwiftPM resolved pins changed; update and review Package.resolved locally"
+            diff -u "$RUNNER_TEMP/pins-before.json" "$RUNNER_TEMP/pins-after.json" || true
+            exit 1
+          fi
 
       - name: Build local-only app
         run: |
