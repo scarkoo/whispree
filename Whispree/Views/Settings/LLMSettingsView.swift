@@ -8,24 +8,23 @@ struct LLMSettingsView: View {
             VStack(spacing: 20) {
                 GroupBox("로컬 텍스트 교정") {
                     VStack(alignment: .leading, spacing: 14) {
-                        Picker("Provider", selection: providerBinding) {
-                            ForEach(LLMProviderType.allCases, id: \.self) { type in
-                                Text(type.displayName).tag(type)
-                            }
+                        Picker("교정", selection: providerBinding) {
+                            Text("사용 안 함").tag(LLMProviderType.none)
+                            Text("Qwen3 8B (로컬)").tag(LLMProviderType.local)
                         }
 
-                        Text("교정 텍스트는 로컬 MLX 모델에서만 처리됩니다. OpenAI, Groq, Codex 인증 경로는 이 fork에서 제거되었습니다.")
+                        HStack {
+                            Text("고정 모델")
+                            Spacer()
+                            Text("Qwen3-8B-4bit")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Text("교정 텍스트는 revision이 고정된 Qwen3 8B 모델에서만 로컬 처리됩니다.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
                         if appState.settings.llmProviderType == .local {
-                            Divider()
-                            Picker("모델", selection: modelBinding) {
-                                ForEach(LocalModelSpec.supported) { spec in
-                                    Text(spec.displayName).tag(spec.id)
-                                }
-                            }
-
                             HStack {
                                 Text("상태")
                                 Spacer()
@@ -82,16 +81,6 @@ struct LLMSettingsView: View {
                 appState.settings.llmProviderType = type
                 appState.settings.isLLMEnabled = type != .none
                 Task { await appState.switchLLMProvider(to: type) }
-            }
-        )
-    }
-
-    private var modelBinding: Binding<String> {
-        Binding(
-            get: { appState.settings.llmModelId },
-            set: { modelID in
-                appState.settings.llmModelId = modelID
-                Task { await appState.switchLLMProvider(to: .local) }
             }
         )
     }
