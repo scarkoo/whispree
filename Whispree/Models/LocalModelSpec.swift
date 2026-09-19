@@ -52,7 +52,7 @@ struct LocalModelSpec: Identifiable, Codable, Hashable {
         // === Gemma 4 ===
         LocalModelSpec(
             id: "mlx-community/gemma-4-e2b-it-4bit",
-            revision: "238767527555cb75a05732a84dff5d6ba0dd6809",
+            revision: "2608698b620cb39d09e8698c3aede1c15b5a5257",
             displayName: "Gemma 4 2B (4-bit)",
             description: "경량 Gemma — 빠른 속도",
             sizeBytes: 3_610_000_000,      // 실측 3.61 GB
