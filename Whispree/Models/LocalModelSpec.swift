@@ -16,11 +16,10 @@ struct LocalModelSpec: Identifiable, Codable, Hashable {
 
     enum ModelCapability: String, Codable {
         case text    // MLXLLM — 텍스트 전용
-        case vision  // MLXVLM — 텍스트 + 이미지
     }
 
     enum ModelRuntime: String, Codable {
-        case swift   // mlx-swift-lm (MLXLLM / MLXVLM)
+        case swift   // mlx-swift-lm (MLXLLM)
         case python  // mlx-lm Python worker (uv 필요) — 최신 아키텍처(MoE 등) 지원
     }
 
@@ -97,16 +96,6 @@ struct LocalModelSpec: Identifiable, Codable, Hashable {
             qualityScore: 29,
             runtime: .python
         ),
-        LocalModelSpec(
-            id: "mlx-community/diffusiongemma-26B-A4B-it-4bit",
-            displayName: "DiffusionGemma 26B MoE (4-bit)",
-            description: "DiffusionGemma VLM — 블록 확산 생성, 스크린샷 교정 지원 (uv 필요)",
-            sizeBytes: 15_600_000_000,     // HF 모델 카드: 4-bit MLX, 15.6 GB
-            capability: .vision,
-            minMemoryGB: 32,
-            qualityScore: 31,
-            runtime: .python
-        ),
 
         // === Qwen3 ===
         LocalModelSpec(
@@ -153,16 +142,6 @@ struct LocalModelSpec: Identifiable, Codable, Hashable {
             capability: .text,
             minMemoryGB: 32,
             qualityScore: 22
-        ),
-        // Vision (MLXVLM)
-        LocalModelSpec(
-            id: "mlx-community/Qwen3-VL-4B-Instruct-8bit",
-            displayName: "Qwen3 VL 4B (8-bit)",
-            description: "비전+텍스트 교정 — 스크린샷 컨텍스트 활용",
-            sizeBytes: 4_800_000_000,      // 실측 4.8 GB
-            capability: .vision,
-            minMemoryGB: 16,
-            qualityScore: 30
         ),
     ]
 
