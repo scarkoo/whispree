@@ -56,10 +56,15 @@ jobs:
 
       - name: Build local-only app
         run: |
+          # mlx-swift-lm uses a Swift macro target (MLXHuggingFaceMacros).
+          # GitHub-hosted runners cannot interactively approve macro trust.
+          # Dependencies are exact/revision pinned and Package.resolved is tracked,
+          # so skip only macro validation here. Package plugin validation remains enabled.
           xcodebuild -project Whispree.xcodeproj \
             -scheme Whispree \
             -destination 'platform=macOS,arch=arm64' \
             -configuration Release \
+            -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build
