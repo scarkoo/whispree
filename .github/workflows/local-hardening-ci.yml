@@ -33,6 +33,11 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Validate security manifests
+        run: |
+          plutil -lint Whispree/Resources/Info.plist
+          plutil -lint Whispree/Resources/Whispree.entitlements
+
       - name: Resolve Swift packages
         run: |
           xcodebuild -project Whispree.xcodeproj \
