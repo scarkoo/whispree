@@ -8,13 +8,14 @@ struct STTSettingsView: View {
             VStack(spacing: 20) {
                 GroupBox("로컬 STT") {
                     VStack(alignment: .leading, spacing: 14) {
-                        Picker("Provider", selection: providerBinding) {
-                            ForEach(STTProviderType.allCases, id: \.self) { type in
-                                Text(type.displayName).tag(type)
-                            }
+                        HStack {
+                            Text("Provider")
+                            Spacer()
+                            Text("WhisperKit Large V3 Turbo")
+                                .foregroundStyle(.secondary)
                         }
 
-                        Text("음성은 선택한 온디바이스 모델에서 처리됩니다. 모델 다운로드 외에는 STT 오디오가 네트워크로 전송되지 않습니다.")
+                        Text("STT는 revision이 고정된 WhisperKit 모델만 사용합니다.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -33,7 +34,7 @@ struct STTSettingsView: View {
 
                 GroupBox("상태") {
                     HStack {
-                        Text(appState.settings.sttProviderType.displayName)
+                        Text("WhisperKit (로컬 고정)")
                         Spacer()
                         stateLabel(appState.whisperModelState)
                     }
@@ -56,16 +57,6 @@ struct STTSettingsView: View {
         Binding(
             get: { appState.settings.vadEnabled },
             set: { appState.settings.vadEnabled = $0 }
-        )
-    }
-
-    private var providerBinding: Binding<STTProviderType> {
-        Binding(
-            get: { appState.settings.sttProviderType },
-            set: { type in
-                appState.settings.sttProviderType = type
-                Task { await appState.switchSTTProvider(to: type) }
-            }
         )
     }
 
