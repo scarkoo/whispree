@@ -47,7 +47,6 @@ Package.resolved
 ._*
 *.swp
 *.lock
-!mlx-worker/uv.lock
 profile
 
 # AI / Tooling
