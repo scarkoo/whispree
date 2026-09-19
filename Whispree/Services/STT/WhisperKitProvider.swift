@@ -9,6 +9,12 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
 
     private var whisperKit: WhisperKit?
 
+    private static let modelRepo = "argmaxinc/whisperkit-coreml"
+    private static let modelRevision = "0f63a7800b00dd0226abd051b906c246e1907482"
+    private static let modelVariant = "openai_whisper-large-v3_turbo"
+    private static let tokenizerRepo = "openai/whisper-large-v3"
+    private static let tokenizerRevision = "06f233fe06e710322aca913c1bc4249a0d71fce1"
+
     func validate() -> ProviderValidation {
         guard let whisperKit else {
             return .invalid("WhisperKit 모델이 로드되지 않았습니다. 모델을 다운로드해주세요.")
@@ -19,13 +25,36 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
     }
 
     func setup() async throws {
+        // WhisperKit's convenience downloader follows the repository's mutable
+        // main branch. Resolve both the CoreML model and tokenizer at reviewed
+        // immutable commits, then initialize WhisperKit from local folders only.
+        let modelDownloader = ModelDownloader(
+            repoName: Self.modelRepo,
+            revision: Self.modelRevision
+        )
+        let modelRoot = try await modelDownloader.resolveRepo(
+            patterns: ["\(Self.modelVariant)/*"]
+        )
+        let modelFolder = modelRoot.appendingPathComponent(Self.modelVariant)
+
+        let tokenizerDownloader = ModelDownloader(
+            repoName: Self.tokenizerRepo,
+            revision: Self.tokenizerRevision
+        )
+        let tokenizerFolder = try await tokenizerDownloader.resolveRepo(
+            patterns: ["*.json", "*.txt"]
+        )
+
         let config = WhisperKitConfig(
-            model: "openai_whisper-large-v3_turbo",
+            model: Self.modelVariant,
+            modelFolder: modelFolder.path,
+            tokenizerFolder: tokenizerFolder,
             computeOptions: ModelComputeOptions(
                 audioEncoderCompute: .cpuAndNeuralEngine,
                 textDecoderCompute: .cpuAndNeuralEngine
             ),
-            load: true
+            load: true,
+            download: false
         )
         whisperKit = try await WhisperKit(config)
     }
