@@ -38,7 +38,7 @@ struct LLMSettingsView: View {
 
                 GroupBox("교정 방식") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Picker("Mode", selection: $appState.settings.correctionMode) {
+                        Picker("Mode", selection: correctionModeBinding) {
                             ForEach(CorrectionMode.allCases, id: \.self) { mode in
                                 Text(mode.displayName).tag(mode)
                             }
@@ -66,6 +66,13 @@ struct LLMSettingsView: View {
             .padding(24)
         }
         .liquidBackground()
+    }
+
+    private var correctionModeBinding: Binding<CorrectionMode> {
+        Binding(
+            get: { appState.settings.correctionMode },
+            set: { appState.settings.correctionMode = $0 }
+        )
     }
 
     private var providerBinding: Binding<LLMProviderType> {
