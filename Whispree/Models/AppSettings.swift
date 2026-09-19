@@ -22,8 +22,6 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
     @UserDefault(key: "whispree.hasCompletedOnboarding", defaultValue: false)
     var hasCompletedOnboarding: Bool
 
-    @UserDefault(key: "whispree.launchAtLogin", defaultValue: false)
-    var launchAtLogin: Bool
 
     @UserDefault(key: "whispree.showOverlay", defaultValue: true)
     var showOverlay: Bool
@@ -80,11 +78,6 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
     @CodableUserDefault(key: "whispree.domainWordSets", defaultValue: [])
     var domainWordSets: [DomainWordSet]
 
-    @UserDefault(key: "whispree.sharedDictionaryEnabled", defaultValue: false)
-    var sharedDictionaryEnabled: Bool
-
-    @UserDefault(key: "whispree.sharedDictionaryPath", defaultValue: nil)
-    var sharedDictionaryPath: String?
 
     @CodableUserDefault(
         key: "whispree.toggleRecordingShortcut",
@@ -136,7 +129,9 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
             "whispree.isScreenshotPasteEnabled",
             "whispree.pauseMediaDuringRecording",
             "whispree.restoreBrowserTab",
-            "whispree.restoreTerminalContext"
+            "whispree.restoreTerminalContext",
+            "whispree.sharedDictionaryEnabled",
+            "whispree.sharedDictionaryPath"
         ].forEach(defaults.removeObject)
     }
 
@@ -174,29 +169,6 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
         defaults.set(true, forKey: flagKey)
     }
 
-    var sharedDictionaryConfig: SharedDictionaryConfig {
-        SharedDictionaryConfig(customURL: sharedDictionaryPath.flatMap {
-            $0.isEmpty ? nil : URL(fileURLWithPath: $0)
-        })
-    }
-
-    func exportSharedDictionary() {
-        guard sharedDictionaryEnabled, let url = sharedDictionaryConfig.resolvedFileURL else { return }
-        let snapshot = domainWordSets
-        Task.detached { try? SharedDictionaryStore.save(snapshot, to: url) }
-    }
-
-    @discardableResult
-    func importSharedDictionary() -> Bool {
-        guard sharedDictionaryEnabled,
-              let url = sharedDictionaryConfig.resolvedFileURL,
-              FileManager.default.fileExists(atPath: url.path),
-              let imported = try? SharedDictionaryStore.load(from: url),
-              !imported.isEmpty
-        else { return false }
-        domainWordSets = imported
-        return true
-    }
 }
 
 enum STTProviderType: String, Codable, CaseIterable {
