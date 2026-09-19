@@ -247,13 +247,21 @@ final class ModelManager: ObservableObject {
     /// WhisperKit 모델 캐시 판정 — 자체 포맷 사용 (~/Documents/huggingface/models/...)
     nonisolated static func isWhisperKitCached() -> Bool {
         let fm = FileManager.default
-        let candidates = [
-            fm.homeDirectoryForCurrentUser
-                .appendingPathComponent("Documents/huggingface/models/" + Self.whisperKitRepoId),
-            fm.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Caches/huggingface/models--" + Self.whisperKitRepoId.replacingOccurrences(of: "/", with: "--"))
-        ]
-        return candidates.contains { fm.fileExists(atPath: $0.path) }
+        let base = WhisperKitProvider.pinnedModelDownloadBase
+        guard fm.fileExists(atPath: base.path),
+              let enumerator = fm.enumerator(
+                  at: base,
+                  includingPropertiesForKeys: nil,
+                  options: [.skipsHiddenFiles]
+              )
+        else { return false }
+
+        for case let url as URL in enumerator
+        where url.lastPathComponent == WhisperKitProvider.modelVariant {
+            return fm.fileExists(atPath: url.appendingPathComponent("AudioEncoder.mlmodelc").path)
+                && fm.fileExists(atPath: url.appendingPathComponent("TextDecoder.mlmodelc").path)
+        }
+        return false
     }
 
     private func modelCachePaths(repoId: String) -> [URL] {
