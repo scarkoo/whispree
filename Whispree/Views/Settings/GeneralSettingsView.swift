@@ -50,14 +50,14 @@ struct GeneralSettingsView: View {
                             }
                         }
 
-                        Picker("언어", selection: $appState.settings.language) {
+                        Picker("언어", selection: languageBinding) {
                             ForEach(SupportedLanguage.allCases, id: \.self) { language in
                                 Text(language.displayName).tag(language)
                             }
                         }
 
-                        Toggle("녹음 오버레이 표시", isOn: $appState.settings.showOverlay)
-                        Toggle("무음 구간 제거", isOn: $appState.settings.vadEnabled)
+                        Toggle("녹음 오버레이 표시", isOn: showOverlayBinding)
+                        Toggle("무음 구간 제거", isOn: vadEnabledBinding)
                     }
                     .padding(8)
                 }
@@ -90,6 +90,27 @@ struct GeneralSettingsView: View {
         }
         .liquidBackground()
         .task { permissions.refreshAll() }
+    }
+
+    private var languageBinding: Binding<SupportedLanguage> {
+        Binding(
+            get: { appState.settings.language },
+            set: { appState.settings.language = $0 }
+        )
+    }
+
+    private var showOverlayBinding: Binding<Bool> {
+        Binding(
+            get: { appState.settings.showOverlay },
+            set: { appState.settings.showOverlay = $0 }
+        )
+    }
+
+    private var vadEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { appState.settings.vadEnabled },
+            set: { appState.settings.vadEnabled = $0 }
+        )
     }
 
     private var recordingModeBinding: Binding<RecordingMode> {
