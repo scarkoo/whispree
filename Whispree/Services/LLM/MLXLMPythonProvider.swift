@@ -23,6 +23,7 @@ final class MLXLMPythonProvider: LLMProvider {
 
     private var _isReady = false
     private let modelId: String
+    private let revision: String
     private let workerPath: String
     private let progressHandler: ProgressHandler?
     private let correctionTimeout: TimeInterval = 60.0
@@ -35,8 +36,13 @@ final class MLXLMPythonProvider: LLMProvider {
         Self.findUvPath() != nil
     }
 
-    init(modelId: String, progressHandler: ProgressHandler? = nil) {
+    init(
+        modelId: String,
+        revision: String,
+        progressHandler: ProgressHandler? = nil
+    ) {
         self.modelId = modelId
+        self.revision = revision
         self.workerPath = Self.resolveWorkerPath()
         self.progressHandler = progressHandler
     }
@@ -47,9 +53,9 @@ final class MLXLMPythonProvider: LLMProvider {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser.path
         let candidates = [
-            "\(home)/.local/bin/uv",
             "/opt/homebrew/bin/uv",
             "/usr/local/bin/uv",
+            "\(home)/.local/bin/uv",
         ]
         for path in candidates where fm.isExecutableFile(atPath: path) {
             return path
@@ -63,29 +69,35 @@ final class MLXLMPythonProvider: LLMProvider {
             .appendingPathComponent("Whispree/mlx-worker")
         let appSupportPath = appSupportURL.path
 
-        // 개발 모드: 프로젝트 디렉토리의 mlx_llm_worker.py가 가장 최신 (Bundle 복사 지연 대비)
+        // The signed app bundle is the trust root. Always refresh the writable
+        // Application Support copy before executing it.
+        if let bundlePath = Bundle.main.resourcePath.map({ $0 + "/mlx-worker" }),
+           fm.fileExists(atPath: bundlePath + "/mlx_llm_worker.py")
+        {
+            do {
+                try fm.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
+                for file in ["mlx_worker.py", "mlx_llm_worker.py", "pyproject.toml", "uv.lock"] {
+                    let src = bundlePath + "/" + file
+                    let dst = appSupportPath + "/" + file
+                    guard fm.fileExists(atPath: src) else { continue }
+                    try? fm.removeItem(atPath: dst)
+                    try fm.copyItem(atPath: src, toPath: dst)
+                    guard fm.contentsEqual(atPath: src, andPath: dst) else {
+                        return appSupportPath + "/.invalid-worker-copy"
+                    }
+                }
+                return appSupportPath
+            } catch {
+                return appSupportPath + "/.invalid-worker-copy"
+            }
+        }
+
+        // Source-tree fallback is development-only when no bundled worker exists.
         let devPath = fm.currentDirectoryPath + "/mlx-worker"
         if fm.fileExists(atPath: devPath + "/mlx_llm_worker.py") {
             return devPath
         }
-
-        // Bundle → Application Support 복사
-        if let bundlePath = Bundle.main.resourcePath.map({ $0 + "/mlx-worker" }),
-           fm.fileExists(atPath: bundlePath + "/mlx_llm_worker.py")
-        {
-            try? fm.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
-            for file in ["mlx_worker.py", "mlx_llm_worker.py", "pyproject.toml", "uv.lock"] {
-                let src = bundlePath + "/" + file
-                let dst = appSupportPath + "/" + file
-                if fm.fileExists(atPath: src) {
-                    try? fm.removeItem(atPath: dst)
-                    try? fm.copyItem(atPath: src, toPath: dst)
-                }
-            }
-            return appSupportPath
-        }
-
-        return appSupportPath
+        return appSupportPath + "/.missing-worker"
     }
 
     // MARK: - LLMProvider
@@ -182,7 +194,7 @@ final class MLXLMPythonProvider: LLMProvider {
         try sendCommand([
             "cmd": "load",
             "model": modelId,
-            "capability": "text",
+            "revision": revision,
         ])
         let loadResp = try await readResponse(timeout: 1800)
         pollerTask?.cancel()
@@ -248,7 +260,6 @@ final class MLXLMPythonProvider: LLMProvider {
             "cmd": "correct",
             "system_prompt": fullPrompt,
             "user_text": text,
-            "screenshots": [] as [String],
             "max_tokens": 2000,
             "temperature": 0.0,
         ])
