@@ -61,7 +61,7 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
            fm.fileExists(atPath: bundlePath + "/mlx_worker.py")
         {
             try? fm.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
-            for file in ["mlx_worker.py", "pyproject.toml"] {
+            for file in ["mlx_worker.py", "pyproject.toml", "uv.lock"] {
                 let src = bundlePath + "/" + file
                 let dst = appSupportPath + "/" + file
                 try? fm.removeItem(atPath: dst)
@@ -91,18 +91,15 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
         // 고아 프로세스 정리
         Self.killOrphanedWorkers()
 
-        // uv sync (첫 실행 시 의존성 설치)
-        let venvPath = workerPath + "/.venv"
-        if !FileManager.default.fileExists(atPath: venvPath) {
-            let syncProcess = Process()
-            syncProcess.executableURL = URL(fileURLWithPath: uvPath)
-            syncProcess.arguments = ["sync"]
-            syncProcess.currentDirectoryURL = URL(fileURLWithPath: workerPath)
-            try syncProcess.run()
-            syncProcess.waitUntilExit()
-            guard syncProcess.terminationStatus == 0 else {
-                throw STTError.transcriptionFailed("uv sync failed")
-            }
+        // Resolve strictly from the committed lockfile.
+        let syncProcess = Process()
+        syncProcess.executableURL = URL(fileURLWithPath: uvPath)
+        syncProcess.arguments = ["sync", "--frozen"]
+        syncProcess.currentDirectoryURL = URL(fileURLWithPath: workerPath)
+        try syncProcess.run()
+        syncProcess.waitUntilExit()
+        guard syncProcess.terminationStatus == 0 else {
+            throw STTError.transcriptionFailed("uv sync --frozen failed")
         }
 
         // 파이프 설정
@@ -111,7 +108,7 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: uvPath)
-        proc.arguments = ["run", "python", "mlx_worker.py"]
+        proc.arguments = ["run", "--frozen", "python", "mlx_worker.py"]
         proc.currentDirectoryURL = URL(fileURLWithPath: workerPath)
         proc.standardInput = stdin
         proc.standardOutput = stdout
