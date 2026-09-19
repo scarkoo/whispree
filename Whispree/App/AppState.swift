@@ -45,13 +45,8 @@ final class AppState: ObservableObject {
     ) {
         let resolvedSettings = settings ?? AppSettings()
         self.settings = resolvedSettings
-        self.sttProviderFactory = sttProviderFactory ?? { type, settings in
-            switch type {
-            case .whisperKit:
-                WhisperKitProvider()
-            case .mlxAudio:
-                MLXAudioProvider(modelId: settings.mlxAudioModelId)
-            }
+        self.sttProviderFactory = sttProviderFactory ?? { _, _ in
+            WhisperKitProvider()
         }
 
         resolvedSettings.objectWillChange
@@ -106,12 +101,7 @@ final class AppState: ObservableObject {
     }
 
     func sttProviderConfigurationKey(for type: STTProviderType) -> String {
-        switch type {
-        case .whisperKit:
-            "whisperKit:\(settings.whisperModelId)"
-        case .mlxAudio:
-            "mlxAudio:\(settings.mlxAudioModelId)"
-        }
+        "whisperKit:\(WhisperKitProvider.modelRevision)"
     }
 
     func switchLLMProvider(to type: LLMProviderType) async {
@@ -124,29 +114,11 @@ final class AppState: ObservableObject {
             llmModelState = .ready
 
         case .local:
-            let spec = LocalModelSpec.find(settings.llmModelId)
-            let provider: any LLMProvider
-            if spec?.runtime == .python {
-                provider = MLXLMPythonProvider(
-                    modelId: settings.llmModelId,
-                    revision: spec?.revision ?? ""
-                ) { [weak self] phase in
-                    guard let self else { return }
-                    switch phase {
-                    case .uvSync:
-                        self.llmModelState = .loading
-                    case let .downloading(progress):
-                        self.llmModelState = .downloading(progress: progress)
-                    case .loading:
-                        self.llmModelState = .loading
-                    }
-                }
-            } else {
-                provider = LocalTextProvider(
-                    modelId: settings.llmModelId,
-                    revision: spec?.revision
-                )
-            }
+            let spec = LocalModelSpec.qwen3_8B
+            let provider: any LLMProvider = LocalTextProvider(
+                modelId: spec.id,
+                revision: spec.revision
+            )
             llmProvider = provider
             do {
                 try await provider.setup()
