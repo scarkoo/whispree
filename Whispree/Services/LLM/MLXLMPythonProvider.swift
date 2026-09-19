@@ -51,11 +51,9 @@ final class MLXLMPythonProvider: LLMProvider {
 
     private static func findUvPath() -> String? {
         let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser.path
         let candidates = [
             "/opt/homebrew/bin/uv",
             "/usr/local/bin/uv",
-            "\(home)/.local/bin/uv",
         ]
         for path in candidates where fm.isExecutableFile(atPath: path) {
             return path
