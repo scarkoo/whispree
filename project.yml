@@ -32,9 +32,6 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     exactVersion: "2.0.0"
-  LaunchAtLogin:
-    url: https://github.com/sindresorhus/LaunchAtLogin-Modern
-    exactVersion: "1.0.0"
 
 targets:
   Whispree:
@@ -98,7 +95,6 @@ targets:
       - package: swift-transformers
         product: Tokenizers
       - package: KeyboardShortcuts
-      - package: LaunchAtLogin
     entitlements:
       path: Whispree/Resources/Whispree.entitlements
       properties:
