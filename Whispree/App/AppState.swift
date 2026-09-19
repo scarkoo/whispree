@@ -31,7 +31,6 @@ final class AppState: ObservableObject {
     private var activeSTTProviderConfigurationKey: String?
     private var sttProviderLoadGeneration = 0
     private var cancellables = Set<AnyCancellable>()
-    private var lastSyncedDomainWordSetsHash = 0
 
     @Published var transcriptionHistory: [TranscriptionRecord] = [] {
         didSet { saveHistory() }
@@ -59,13 +58,6 @@ final class AppState: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
-            .sink { [weak self] _ in self?.exportDomainWordSetsIfChanged() }
-            .store(in: &cancellables)
-
-        resolvedSettings.importSharedDictionary()
-        lastSyncedDomainWordSetsHash = resolvedSettings.domainWordSets.hashValue
         loadHistory()
     }
 
@@ -178,13 +170,6 @@ final class AppState: ObservableObject {
 
     func clearError() { currentError = nil }
 
-    private func exportDomainWordSetsIfChanged() {
-        guard settings.sharedDictionaryEnabled else { return }
-        let hash = settings.domainWordSets.hashValue
-        guard hash != lastSyncedDomainWordSetsHash else { return }
-        lastSyncedDomainWordSetsHash = hash
-        settings.exportSharedDictionary()
-    }
 
     private func saveHistory() {
         if let data = try? JSONEncoder().encode(transcriptionHistory) {
