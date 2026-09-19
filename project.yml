@@ -1,6 +1,6 @@
 name: Whispree
 options:
-  bundleIdPrefix: com.whispree
+  bundleIdPrefix: com.scarkoo
   deploymentTarget:
     macOS: "14.0"
   xcodeVersion: "16.3"
@@ -16,25 +16,22 @@ settings:
 packages:
   WhisperKit:
     url: https://github.com/argmaxinc/WhisperKit
-    from: "0.9.0"
+    exactVersion: "0.9.0"
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm
     revision: 7e2b710
   swift-huggingface:
     url: https://github.com/huggingface/swift-huggingface
-    from: "0.9.0"
+    exactVersion: "0.9.0"
   swift-transformers:
     url: https://github.com/huggingface/swift-transformers
-    from: "1.1.6"
+    exactVersion: "1.1.6"
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
-    from: "2.0.0"
+    exactVersion: "2.0.0"
   LaunchAtLogin:
     url: https://github.com/sindresorhus/LaunchAtLogin-Modern
-    from: "1.0.0"
-  Sparkle:
-    url: https://github.com/sparkle-project/Sparkle
-    from: "2.6.0"
+    exactVersion: "1.0.0"
 
 targets:
   Whispree:
@@ -46,33 +43,34 @@ targets:
           - "**/.DS_Store"
           - "**/AGENTS.md"
           - "Vendor/**"
+          - "Services/Auth/**"
+          - "Services/ScreenCapture/**"
+          - "Services/MediaPlayback/**"
+          - "Services/LLM/OpenAIProvider.swift"
+          - "Services/LLM/OpenAICompatibleProvider.swift"
+          - "Services/LLM/GroqLLMProvider.swift"
+          - "Services/LLM/LocalVisionProvider.swift"
+          - "Services/STT/GroqSTTProvider.swift"
     resources:
       - path: Whispree/Resources/Assets.xcassets
     postBuildScripts:
       - script: |
-          mkdir -p "${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/mlx-worker"
-          cp "${SRCROOT}/mlx-worker/mlx_worker.py" "${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/mlx-worker/"
-          cp "${SRCROOT}/mlx-worker/mlx_llm_worker.py" "${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/mlx-worker/"
-          cp "${SRCROOT}/mlx-worker/pyproject.toml" "${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/mlx-worker/"
-        name: Copy mlx-worker to bundle
-      - script: |
-          DEST="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/MediaRemoteAdapter"
-          rm -rf "$DEST"
+          DEST="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/mlx-worker"
           mkdir -p "$DEST"
-          cp -R "${SRCROOT}/Whispree/Vendor/MediaRemoteAdapter/MediaRemoteAdapter.framework" "$DEST/"
-          cp "${SRCROOT}/Whispree/Vendor/MediaRemoteAdapter/MediaRemoteAdapterTestClient" "$DEST/"
-          cp "${SRCROOT}/Whispree/Vendor/MediaRemoteAdapter/mediaremote-adapter.pl" "$DEST/"
-          cp "${SRCROOT}/Whispree/Vendor/MediaRemoteAdapter/LICENSE" "$DEST/LICENSE"
-          chmod +x "$DEST/MediaRemoteAdapterTestClient" "$DEST/mediaremote-adapter.pl"
-        name: Copy MediaRemoteAdapter to bundle
+          cp "${SRCROOT}/mlx-worker/mlx_worker.py" "$DEST/"
+          cp "${SRCROOT}/mlx-worker/mlx_llm_worker.py" "$DEST/"
+          cp "${SRCROOT}/mlx-worker/pyproject.toml" "$DEST/"
+          if [ -f "${SRCROOT}/mlx-worker/uv.lock" ]; then
+            cp "${SRCROOT}/mlx-worker/uv.lock" "$DEST/"
+          fi
+        name: Copy mlx-worker to bundle
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.whispree.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.scarkoo.whispree
         PRODUCT_NAME: Whispree
         INFOPLIST_FILE: Whispree/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Whispree/Resources/Whispree.entitlements
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: DRDT2F8525
         ENABLE_HARDENED_RUNTIME: "YES"
         COMBINE_HIDPI_IMAGES: "YES"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -85,8 +83,6 @@ targets:
       - package: mlx-swift-lm
         product: MLXLMCommon
       - package: mlx-swift-lm
-        product: MLXVLM
-      - package: mlx-swift-lm
         product: MLXHuggingFace
       - package: swift-huggingface
         product: HuggingFace
@@ -94,7 +90,6 @@ targets:
         product: Tokenizers
       - package: KeyboardShortcuts
       - package: LaunchAtLogin
-      - package: Sparkle
     entitlements:
       path: Whispree/Resources/Whispree.entitlements
       properties:
@@ -107,13 +102,15 @@ targets:
     platform: macOS
     sources:
       - path: WhispreeTests
+        excludes:
+          - "E2E/**"
+          - "Services/LLMServiceTests.swift"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.whispree.app.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.scarkoo.whispree.tests
         GENERATE_INFOPLIST_FILE: "YES"
         BUNDLE_LOADER: "$(TEST_HOST)"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Whispree.app/Contents/MacOS/Whispree"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: DRDT2F8525
     dependencies:
       - target: Whispree
