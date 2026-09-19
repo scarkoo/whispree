@@ -8,6 +8,11 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
     }
 
     private var whisperKit: WhisperKit?
+    private let downloadProgressHandler: (@Sendable (Double) -> Void)?
+
+    init(downloadProgressHandler: (@Sendable (Double) -> Void)? = nil) {
+        self.downloadProgressHandler = downloadProgressHandler
+    }
 
     static let modelRepo = "argmaxinc/whisperkit-coreml"
     static let modelRevision = "0f63a7800b00dd0226abd051b906c246e1907482"
@@ -35,6 +40,8 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
     }
 
     func setup() async throws {
+        downloadProgressHandler?(0)
+
         // WhisperKit's convenience downloader follows the repository's mutable
         // main branch. Resolve both the CoreML model and tokenizer at reviewed
         // immutable commits, then initialize WhisperKit from local folders only.
@@ -44,8 +51,12 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
             revision: Self.modelRevision
         ))
         let modelRoot = try await modelDownloader.resolveRepo(
-            patterns: ["\(Self.modelVariant)/*"]
+            patterns: ["\(Self.modelVariant)/*"],
+            progressCallback: { [downloadProgressHandler] progress in
+                downloadProgressHandler?(min(0.98, max(0, progress.fractionCompleted) * 0.98))
+            }
         )
+        downloadProgressHandler?(0.98)
         let modelFolder = modelRoot.appendingPathComponent(Self.modelVariant)
 
         let tokenizerDownloader = ModelDownloader(config: ModelDownloadConfig(
@@ -54,7 +65,11 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
             revision: Self.tokenizerRevision
         ))
         let tokenizerFolder = try await tokenizerDownloader.resolveRepo(
-            patterns: ["*.json", "*.txt"]
+            patterns: ["*.json", "*.txt"],
+            progressCallback: { [downloadProgressHandler] progress in
+                let tokenizerFraction = min(1, max(0, progress.fractionCompleted))
+                downloadProgressHandler?(0.98 + tokenizerFraction * 0.02)
+            }
         )
 
         let config = WhisperKitConfig(
@@ -69,6 +84,7 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
             download: false
         )
         whisperKit = try await WhisperKit(config)
+        downloadProgressHandler?(1)
     }
 
     func teardown() async {
