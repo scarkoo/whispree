@@ -18,6 +18,9 @@ def _error(msg: str):
 
 def handle_load(model_id: str, revision: str):
     global _model, _tokenizer, _model_id
+    if not revision:
+        _error("Pinned model revision is required")
+        return
     try:
         from mlx_lm import load
         _model, _tokenizer = load(model_id, revision=revision)
