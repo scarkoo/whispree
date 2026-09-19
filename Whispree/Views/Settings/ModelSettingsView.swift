@@ -157,7 +157,6 @@ struct ModelSettingsView: View {
 
 enum ModelMetrics {
     case local(size: String, ramPercent: Int, tokPerSec: Int?, qualityScore: Int, grade: CompatibilityGrade)
-    case cloud(latencyMs: Int, qualityScore: Int)
 }
 
 // MARK: - DownloadableModelRow (no nested background)
@@ -287,12 +286,6 @@ struct DownloadableModelRow: View {
                 sizeText: size, ramPercent: ramPercent,
                 tokPerSec: tokPerSec, latencyMs: nil,
                 qualityScore: qualityScore, grade: grade
-            )
-        case let .cloud(latencyMs, qualityScore):
-            ModelMetricsView(
-                sizeText: "☁️", ramPercent: nil,
-                tokPerSec: nil, latencyMs: latencyMs,
-                qualityScore: qualityScore, grade: .runsGreat
             )
         }
     }
