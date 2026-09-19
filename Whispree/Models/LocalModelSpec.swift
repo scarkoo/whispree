@@ -27,7 +27,7 @@ struct LocalModelSpec: Identifiable, Codable, Hashable {
         revision: "545dc4251c05440727734bcd94334791f6ab0192",
         displayName: "Qwen3 8B (4-bit)",
         description: "고정된 로컬 텍스트 교정 모델",
-        sizeBytes: 4_300_000_000,
+        sizeBytes: 4_610_000_000,
         minMemoryGB: 16,
         qualityScore: 20
     )
