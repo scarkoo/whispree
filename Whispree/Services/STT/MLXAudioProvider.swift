@@ -77,10 +77,12 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
             }
         }
 
+        #if DEBUG
         let devPath = fm.currentDirectoryPath + "/mlx-worker"
         if fm.fileExists(atPath: devPath + "/mlx_worker.py") {
             return devPath
         }
+        #endif
         return appSupportPath + "/.missing-worker"
     }
 
