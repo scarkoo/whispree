@@ -36,21 +36,6 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
     @UserDefault(key: "whispree.customLLMPrompt", defaultValue: nil)
     var customLLMPrompt: String?
 
-    @UserDefault(
-        key: "whispree.whisperModelId",
-        defaultValue: "openai_whisper-large-v3_turbo"
-    )
-    var whisperModelId: String
-
-    @UserDefault(
-        key: "whispree.llmModelId",
-        defaultValue: LocalModelSpec.defaultModelId
-    )
-    var llmModelId: String
-
-    @RawRepresentableUserDefault(key: "whispree.sttProviderType", defaultValue: .whisperKit)
-    var sttProviderType: STTProviderType
-
     @RawRepresentableUserDefault(
         key: "whispree.llmProviderType",
         defaultValue: .local,
@@ -92,18 +77,10 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
         if migrateHotkeys {
             migrateHotkeysIfNeeded()
         }
-        // This fork intentionally supports exactly one reviewed local LLM.
-        if llmModelId != LocalModelSpec.defaultModelId {
-            llmModelId = LocalModelSpec.defaultModelId
-        }
     }
 
     private func sanitizeLegacyProviderSelections() {
         let defaults = userDefaultsStore
-        if let stt = defaults.string(forKey: "whispree.sttProviderType"),
-           STTProviderType(rawValue: stt) == nil {
-            defaults.set(STTProviderType.whisperKit.rawValue, forKey: "whispree.sttProviderType")
-        }
         if let llm = defaults.string(forKey: "whispree.llmProviderType"),
            LLMProviderType(rawValue: llm) == nil,
            llm != "없음 (원문 사용)"
@@ -127,6 +104,9 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
             "whispree.restoreTerminalContext",
             "whispree.sharedDictionaryEnabled",
             "whispree.sharedDictionaryPath",
+            "whispree.sttProviderType",
+            "whispree.whisperModelId",
+            "whispree.llmModelId",
             "whispree.mlxAudioModelId"
         ].forEach(defaults.removeObject)
     }
