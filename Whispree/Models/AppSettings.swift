@@ -98,8 +98,11 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
         if migrateHotkeys {
             migrateHotkeysIfNeeded()
         }
-        if llmModelId.contains("Qwen2.5") {
+        if LocalModelSpec.find(llmModelId) == nil {
             llmModelId = LocalModelSpec.defaultModelId
+        }
+        if mlxAudioModelId != "mlx-community/Qwen3-ASR-1.7B-8bit" {
+            mlxAudioModelId = "mlx-community/Qwen3-ASR-1.7B-8bit"
         }
     }
 
