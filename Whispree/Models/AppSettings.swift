@@ -44,15 +44,9 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
 
     @UserDefault(
         key: "whispree.llmModelId",
-        defaultValue: "mlx-community/Qwen3-4B-Instruct-2507-4bit"
+        defaultValue: LocalModelSpec.defaultModelId
     )
     var llmModelId: String
-
-    @UserDefault(
-        key: "whispree.mlxAudioModelId",
-        defaultValue: "mlx-community/Qwen3-ASR-1.7B-8bit"
-    )
-    var mlxAudioModelId: String
 
     @RawRepresentableUserDefault(key: "whispree.sttProviderType", defaultValue: .whisperKit)
     var sttProviderType: STTProviderType
@@ -98,11 +92,9 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
         if migrateHotkeys {
             migrateHotkeysIfNeeded()
         }
-        if LocalModelSpec.find(llmModelId) == nil {
+        // This fork intentionally supports exactly one reviewed local LLM.
+        if llmModelId != LocalModelSpec.defaultModelId {
             llmModelId = LocalModelSpec.defaultModelId
-        }
-        if mlxAudioModelId != "mlx-community/Qwen3-ASR-1.7B-8bit" {
-            mlxAudioModelId = "mlx-community/Qwen3-ASR-1.7B-8bit"
         }
     }
 
@@ -134,7 +126,8 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
             "whispree.restoreBrowserTab",
             "whispree.restoreTerminalContext",
             "whispree.sharedDictionaryEnabled",
-            "whispree.sharedDictionaryPath"
+            "whispree.sharedDictionaryPath",
+            "whispree.mlxAudioModelId"
         ].forEach(defaults.removeObject)
     }
 
@@ -176,14 +169,8 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
 
 enum STTProviderType: String, Codable, CaseIterable {
     case whisperKit = "WhisperKit"
-    case mlxAudio = "MLX Audio"
 
-    var displayName: String {
-        switch self {
-        case .whisperKit: "WhisperKit (로컬)"
-        case .mlxAudio: "MLX Audio (로컬)"
-        }
-    }
+    var displayName: String { "WhisperKit (로컬 고정)" }
 }
 
 enum LLMProviderType: String, Codable, CaseIterable {
