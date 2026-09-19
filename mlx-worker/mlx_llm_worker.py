@@ -16,11 +16,11 @@ def _error(msg: str):
     _respond({"ok": False, "error": msg})
 
 
-def handle_load(model_id: str):
+def handle_load(model_id: str, revision: str):
     global _model, _tokenizer, _model_id
     try:
         from mlx_lm import load
-        _model, _tokenizer = load(model_id)
+        _model, _tokenizer = load(model_id, revision=revision)
         _model_id = model_id
         _respond({"ok": True, "model": model_id, "backend": "mlx-lm"})
     except Exception as exc:
@@ -94,7 +94,7 @@ def main():
 
         action = cmd.get("cmd")
         if action == "load":
-            handle_load(cmd.get("model", ""))
+            handle_load(cmd.get("model", ""), cmd.get("revision", ""))
         elif action == "warmup":
             handle_warmup()
         elif action == "correct":
