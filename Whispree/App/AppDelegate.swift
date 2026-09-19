@@ -233,8 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Dock 아이콘·Cmd+Tab 항목 노출 여부를 결정하는 predicate.
     ///
-    /// **`mainWindow` / `onboardingWindow`만** 반영한다. overlay(녹음 HUD) · selection(스크린샷
-    /// 선택) · preview · quickFix 패널은 백그라운드 dictation queue의 산출물이라, 여기에 연동하면
+    /// **`mainWindow` / `onboardingWindow`만** 반영한다. overlay(녹음 HUD) · quickFix 패널은 백그라운드 dictation queue의 산출물이라, 여기에 연동하면
     /// `scheduleDelivery()`에 쿨다운이 없고 STT/LLM이 병렬로 도는 특성상 연속 받아쓰기 도중
     /// Dock 아이콘이 깜빡인다(strobe). 자세한 근거는 `Whispree/App/AGENTS.md` 참조.
     ///
@@ -492,7 +491,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case .recording, .transcribing, .correcting:
                     self.mainWindow?.level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
                     self.showOverlay()
-                case .idle, .inserting, .selectingScreenshots:
+                case .idle, .inserting:
                     if state == .idle {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             if self.appState.transcriptionState == .idle {
