@@ -18,18 +18,21 @@ struct ModelSettingsView: View {
                 }
 
                 LiquidSection("STT 모델") {
-                    let whisperCompat = ModelCompatibility.evaluate(modelSizeBytes: 1_500_000_000)
+                    let whisperInfo = ModelInfo.whisperLargeV3Turbo
+                    let whisperCompat = ModelCompatibility.evaluate(modelSizeBytes: whisperInfo.sizeBytes)
                     DownloadableModelRow(
                         name: "WhisperKit Large V3 Turbo",
                         description: "고정 revision · 로컬 CoreML + ANE",
                         metrics: .local(
-                            size: "~1.5 GB",
+                            size: whisperInfo.sizeDescription,
                             ramPercent: whisperCompat.ramUsagePercent,
                             tokPerSec: nil,
                             qualityScore: 75,
                             grade: whisperCompat.grade
                         ),
                         state: modelManager.whisperKitDownloaded ? .ready : activeWhisperKitState,
+                        downloadedBytes: whisperDownloadedBytes,
+                        totalBytes: whisperInfo.sizeBytes,
                         onDownload: { Task { await modelManager.downloadWhisperKitModel() } },
                         onDelete: { modelManager.deleteWhisperModel() }
                     )
@@ -75,16 +78,16 @@ struct ModelSettingsView: View {
                 LiquidSection("저장 공간") {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("MLX 모델 위치:")
+                            Text("고정 모델 위치:")
                             Spacer()
-                            Text("~/.cache/huggingface/hub/")
+                            Text("~/Library/Application Support/Whispree/PinnedModels/")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Button("Finder에서 열기") {
-                            let hub = ModelManager.huggingFaceHubDirectory
-                            try? FileManager.default.createDirectory(at: hub, withIntermediateDirectories: true)
-                            NSWorkspace.shared.open(hub)
+                            let directory = ModelManager.pinnedModelsDirectory
+                            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                            NSWorkspace.shared.open(directory)
                         }
                         .font(.caption)
                     }
@@ -96,6 +99,13 @@ struct ModelSettingsView: View {
         .task {
             await modelManager.refreshAllCacheStatesAsync()
         }
+    }
+
+    private var whisperDownloadedBytes: Int64? {
+        guard let progress = modelManager.downloadProgress["argmaxinc/whisperkit-coreml"] else {
+            return nil
+        }
+        return Int64(Double(ModelInfo.whisperLargeV3Turbo.sizeBytes) * progress)
     }
 
     private var activeWhisperKitState: ModelState {
