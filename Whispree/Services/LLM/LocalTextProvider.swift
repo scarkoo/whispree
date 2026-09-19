@@ -12,10 +12,15 @@ final class LocalTextProvider: LLMProvider {
 
     private var modelContainer: ModelContainer?
     private let modelId: String
+    private let revision: String
     private let correctionTimeout: TimeInterval = 15.0
 
-    init(modelId: String = LocalModelSpec.defaultModelId) {
+    init(
+        modelId: String = LocalModelSpec.defaultModelId,
+        revision: String? = nil
+    ) {
         self.modelId = modelId
+        self.revision = revision ?? LocalModelSpec.find(modelId)?.revision ?? ""
     }
 
     func validate() -> ProviderValidation {
@@ -24,7 +29,7 @@ final class LocalTextProvider: LLMProvider {
 
     func setup() async throws {
         MLXMemoryControl.configureInteractiveCacheLimit()
-        let config = ModelConfiguration(id: modelId)
+        let config = ModelConfiguration(id: modelId, revision: revision)
         modelContainer = try await LLMModelFactory.shared.loadContainer(
             from: #hubDownloader(),
             using: #huggingFaceTokenizerLoader(),
