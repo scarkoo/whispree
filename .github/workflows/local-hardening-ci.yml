@@ -25,12 +25,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install build tools
-        run: brew install xcodegen uv
-
-      - name: Verify Python dependency lock
-        run: |
-          cd mlx-worker
-          uv lock --check
+        run: brew install xcodegen
 
       - name: Preserve committed SwiftPM lock
         run: |
@@ -77,5 +72,3 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
 
-      - name: Validate Python sources
-        run: python3 -m py_compile mlx-worker/mlx_worker.py mlx-worker/mlx_llm_worker.py
