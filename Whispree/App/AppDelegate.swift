@@ -56,38 +56,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls {
-            handleURL(url)
-        }
-    }
-
-    private func handleURL(_ url: URL) {
-        guard url.scheme?.lowercased() == "whispree" else { return }
-        let command = url.host?.lowercased()
-            ?? url.pathComponents.filter { $0 != "/" }.first?.lowercased()
-
-        guard let recordingCoordinator else {
-            NSLog("Whispree: URL 수신 — 서비스 초기화 전, 무시: \(url.absoluteString)")
-            return
-        }
-
-        switch command {
-        case "toggle":
-            if appState.isRecording {
-                recordingCoordinator.stopRecording()
-            } else {
-                recordingCoordinator.startRecording()
-            }
-        case "push", "start":
-            recordingCoordinator.startRecording()
-        case "release", "stop":
-            recordingCoordinator.stopRecording()
-        default:
-            NSLog("Whispree: 알 수 없는 URL 커맨드: \(command ?? "nil") — \(url.absoluteString)")
-        }
-    }
-
     // MARK: - Main Menu
 
     /// ⚠️ **이 메뉴는 실제로 화면에 표시되지 않는다.**
@@ -556,7 +524,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayPanel = nil
     }
 
-    // MARK: - NSWindowDelegate (Dock 가시성 재평가)
+}
+
+// MARK: - NSWindowDelegate (Dock 가시성 재평가)
 
 extension AppDelegate: NSWindowDelegate {
     /// `mainWindow` / `onboardingWindow`가 닫힐 때 activation policy predicate를 다시 평가한다.
