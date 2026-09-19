@@ -2,7 +2,6 @@ import AppKit
 import AVFoundation
 import Combine
 import KeyboardShortcuts
-import LaunchAtLogin
 import SwiftUI
 
 @MainActor
@@ -33,18 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hasActivatedOnce = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // `LaunchAtLogin.wasLaunchedAtLogin`은 `NSAppleEventManager.currentAppleEvent`를 읽으므로
-        // Apple event dispatch 중에만 유효하다 — 즉 이 메서드가 **동기적으로** 실행되는 동안에만.
-        // 반드시 최상단에서 로컬로 캡처해 아래로 전달할 것. 호출 체인 깊은 곳에서 읽으면 나중에
-        // 누군가 `await` 하나를 끼워넣는 순간 조용히 garbage(false)를 반환하게 된다.
-        let wasLaunchedAtLogin = LaunchAtLogin.wasLaunchedAtLogin
-
         setupMainMenu()
         setupEditKeyboardShortcuts()
         setupServices()
         setupStatusItem()
         setupOverlayObserver()
-        checkFirstLaunch(wasLaunchedAtLogin: wasLaunchedAtLogin)
+        checkFirstLaunch()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -325,17 +318,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Onboarding
 
-    /// - Parameter wasLaunchedAtLogin: `applicationDidFinishLaunching` 최상단에서 캡처한 값.
-    ///   여기서 `LaunchAtLogin.wasLaunchedAtLogin`을 직접 읽으면 안 된다 (위 주석 참조).
-    private func checkFirstLaunch(wasLaunchedAtLogin: Bool) {
+    private func checkFirstLaunch() {
         if !appState.settings.hasCompletedOnboarding {
-            // 온보딩은 권한 설정이 필수라 로그인 실행이어도 반드시 표시한다.
             showOnboarding()
         } else {
-            // 로그인 항목으로 조용히 뜬 경우엔 창을 띄우지 않는다 — 메뉴바 전용으로 시작.
-            if !wasLaunchedAtLogin {
-                showMainWindow()
-            }
+            showMainWindow()
             Task {
                 await modelManager.loadModelsIfAvailable()
             }
