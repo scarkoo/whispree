@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import AVFoundation
+import Combine
 import Foundation
 
 /// Minimal permission manager for the local-only fork.
