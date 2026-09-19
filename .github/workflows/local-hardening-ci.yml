@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: local-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify-and-lock:
     runs-on: macos-latest
