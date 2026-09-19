@@ -20,13 +20,13 @@ struct STTSettingsView: View {
 
                         Divider()
 
-                        Picker("언어", selection: $appState.settings.language) {
+                        Picker("언어", selection: languageBinding) {
                             ForEach(SupportedLanguage.allCases, id: \.self) { language in
                                 Text(language.displayName).tag(language)
                             }
                         }
 
-                        Toggle("무음 구간 제거 (VAD)", isOn: $appState.settings.vadEnabled)
+                        Toggle("무음 구간 제거 (VAD)", isOn: vadEnabledBinding)
                     }
                     .padding(8)
                 }
@@ -43,6 +43,20 @@ struct STTSettingsView: View {
             .padding(24)
         }
         .liquidBackground()
+    }
+
+    private var languageBinding: Binding<SupportedLanguage> {
+        Binding(
+            get: { appState.settings.language },
+            set: { appState.settings.language = $0 }
+        )
+    }
+
+    private var vadEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { appState.settings.vadEnabled },
+            set: { appState.settings.vadEnabled = $0 }
+        )
     }
 
     private var providerBinding: Binding<STTProviderType> {
