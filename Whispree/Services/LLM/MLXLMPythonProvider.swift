@@ -92,11 +92,13 @@ final class MLXLMPythonProvider: LLMProvider {
             }
         }
 
-        // Source-tree fallback is development-only when no bundled worker exists.
+        // Source-tree fallback is development-only and never available in Release.
+        #if DEBUG
         let devPath = fm.currentDirectoryPath + "/mlx-worker"
         if fm.fileExists(atPath: devPath + "/mlx_llm_worker.py") {
             return devPath
         }
+        #endif
         return appSupportPath + "/.missing-worker"
     }
 
