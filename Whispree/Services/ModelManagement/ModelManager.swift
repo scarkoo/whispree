@@ -211,11 +211,8 @@ final class ModelManager: ObservableObject {
         }
 
         isWhisperKitDownloading = false
-
-        if success {
-            downloadProgress.removeValue(forKey: Self.whisperKitRepoId)
-            downloadedBytes.removeValue(forKey: Self.whisperKitRepoId)
-        }
+        downloadProgress.removeValue(forKey: Self.whisperKitRepoId)
+        downloadedBytes.removeValue(forKey: Self.whisperKitRepoId)
     }
 
     // MARK: - Qwen download
