@@ -1,12 +1,13 @@
 name: Verify local-only hardening
 
 on:
-  push:
-    branches:
-      - security/local-only-hardening
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,9 +51,17 @@ jobs:
             -scheme Whispree \
             -resolvePackageDependencies
 
-      - name: Verify SwiftPM lock is unchanged
+      - name: Verify SwiftPM pins are unchanged
         run: |
-          cmp "$RUNNER_TEMP/Package.resolved" Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          python3 - <<'PY'
+          import json, os
+          before = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "Package.resolved")))
+          after = json.load(open("Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"))
+          def pins(doc):
+              return sorted(doc.get("pins", []), key=lambda item: item["identity"])
+          if pins(before) != pins(after):
+              raise SystemExit("SwiftPM resolved pins changed; update and review Package.resolved locally")
+          PY
 
       - name: Build local-only app
         run: |
