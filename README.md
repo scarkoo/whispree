@@ -11,19 +11,23 @@ Removed from this fork:
 - Groq and other cloud STT
 - OpenAI, OpenAI-compatible, and Groq LLM providers
 - Codex CLI token access and OpenAI OAuth
-- screenshot / screen-context capture and vision models
+- screenshot / screen-context capture, image paste, and vision models
 - MediaRemoteAdapter and media playback automation
 - Chrome / iTerm AppleEvents automation
+- iCloud/shared dictionary synchronization
 - Sparkle auto-update and the upstream release pipeline
+- external recording URL schemes
 - the upstream signing team and bundle identifier
 
-The app does not include an analytics or telemetry client, cloud inference provider, external recording URL scheme, or network entitlement. Model downloads still require outbound networking at the application/library level because this fork is not App-Sandboxed; after models and Python dependencies are installed, normal transcription and correction do not send audio or text to a remote inference service.
+The app does not include an analytics or telemetry client, cloud inference provider, network entitlement, or cloud-sync feature. The app is not App-Sandboxed, so model/package installation can still use outbound networking. Once the pinned models and Python environment are installed, normal transcription and correction do not send audio or text to a remote inference service.
 
 ## Local providers
 
-- STT: WhisperKit Large V3 Turbo (default) or MLX Audio / Qwen3-ASR
-- LLM: local MLX text models only; default is mlx-community/Qwen3-4B-Instruct-2507-4bit
+- STT: pinned WhisperKit Large V3 Turbo (default) or pinned MLX Audio / Qwen3-ASR
+- LLM: pinned local MLX text model revisions only; default is mlx-community/Qwen3-4B-Instruct-2507-4bit
 - Vision models are intentionally unsupported.
+
+WhisperKit CoreML weights and the Whisper tokenizer are downloaded into revision-specific cache roots. MLX model downloads are also pinned to reviewed Hugging Face commit SHAs.
 
 ## Permissions
 
@@ -48,10 +52,15 @@ A paid Apple Developer Program membership is not required for building and runni
 
 ## Dependency reproducibility
 
-Swift packages are pinned in project.yml. Python workers use exact direct dependencies plus mlx-worker/uv.lock, and runtime setup uses uv sync --frozen. Review dependency changes before updating lockfiles.
+- Swift packages are exact-version/revision pinned and committed in Package.resolved.
+- Python direct dependencies are exact-pinned and the full graph is committed in mlx-worker/uv.lock.
+- Python workers run with uv sync --frozen / uv run --frozen.
+- Hugging Face model revisions are immutable commit SHAs.
+- Bundled Python worker files are refreshed from the signed app bundle and byte-verified before execution.
+- GitHub Actions has read-only repository permissions and only verifies lockfiles/build output; it does not push generated commits.
 
 ## Upstream
 
 Original project: https://github.com/Arsture/whispree
 
-This fork deliberately trades cloud-provider flexibility and visual context for a smaller privacy and supply-chain surface.
+This fork deliberately trades cloud-provider flexibility, cloud synchronization, and visual context for a smaller privacy and supply-chain surface.
