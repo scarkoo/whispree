@@ -10,9 +10,8 @@ import Tokenizers
 final class ModelManager: ObservableObject {
     @Published var whisperModelInfo = ModelInfo.whisperLargeV3Turbo
     @Published var isWhisperKitDownloading = false
-    @Published var isMLXAudioDownloading = false
     var isDownloading: Bool {
-        isWhisperKitDownloading || isMLXAudioDownloading || !downloadingModelIds.isEmpty
+        isWhisperKitDownloading || !downloadingModelIds.isEmpty
     }
 
     // MARK: - 통합 모델 캐시 상태 (STT + LLM, SSOT)
@@ -32,7 +31,6 @@ final class ModelManager: ObservableObject {
     @Published var downloadedBytes: [String: Int64] = [:]
     /// 다운로드 대기 중인 LLM 모델 ID (직렬 처리 — URLSession 풀 경쟁 방지)
     @Published var queuedModelIds: Set<String> = []
-    @Published var mlxAudioDownloadState: ModelState = .notDownloaded
 
     /// LLM 다운로드 직렬화 체인 — 동시 다운로드 시 URLSession이 starvation되어 0%에 stuck되는 문제 방지
     private var llmDownloadChain: Task<Void, Never> = Task {}
@@ -57,8 +55,7 @@ final class ModelManager: ObservableObject {
     // MARK: - Computed (SSOT에서 파생)
 
     var whisperKitDownloaded: Bool { modelCacheStates[Self.whisperKitRepoId] ?? false }
-    var mlxAudioDownloaded: Bool { modelCacheStates[appState.settings.mlxAudioModelId] ?? false }
-    var localLLMDownloaded: Bool { modelCacheStates[appState.settings.llmModelId] ?? false }
+    var localLLMDownloaded: Bool { modelCacheStates[LocalModelSpec.defaultModelId] ?? false }
 
     init(appState: AppState, sttService: STTService) {
         self.appState = appState
@@ -83,10 +80,8 @@ final class ModelManager: ObservableObject {
         }
         if let oldSTT = UserDefaults.standard.dictionary(forKey: "WhispreeSTTCacheStates") as? [String: Bool] {
             if oldSTT["whisperKit"] == true { modelCacheStates[Self.whisperKitRepoId] = true }
-            if oldSTT["mlxAudio"] == true { modelCacheStates[appState.settings.mlxAudioModelId] = true }
             UserDefaults.standard.removeObject(forKey: "WhispreeSTTCacheStates")
         }
-        if mlxAudioDownloaded { mlxAudioDownloadState = .ready }
     }
 
     private func persistCacheStates() {
@@ -131,15 +126,6 @@ final class ModelManager: ObservableObject {
             modelCacheStates[Self.whisperKitRepoId] = true
         }
 
-        // STT: MLX Audio
-        let mlxId = appState.settings.mlxAudioModelId
-        if !isMLXAudioDownloading, Self.isModelCached(repoId: mlxId) {
-            modelCacheStates[mlxId] = true
-            if mlxAudioDownloadState == .notDownloaded {
-                mlxAudioDownloadState = .ready
-            }
-        }
-
         // LLM 모델 — 다운로드 진행 중은 skip
         for spec in LocalModelSpec.supported {
             guard !downloadingModelIds.contains(spec.id) else { continue }
@@ -152,27 +138,20 @@ final class ModelManager: ObservableObject {
     /// 비동기 캐시 상태 갱신 — FileManager stat 호출을 background로 오프로드.
     /// 뷰 onAppear/task에서 호출해도 main thread가 block되지 않음.
     func refreshAllCacheStatesAsync() async {
-        let mlxId = appState.settings.mlxAudioModelId
         let whisperId = Self.whisperKitRepoId
         let downloading = downloadingModelIds
         let whisperDownloading = isWhisperKitDownloading
-        let mlxDownloading = isMLXAudioDownloading
         let llmIds = LocalModelSpec.supported.map(\.id)
         let fresh: [String: Bool] = await Task.detached {
             var out: [String: Bool] = [:]
             if !whisperDownloading { out[whisperId] = Self.isWhisperKitCached() }
-            if !mlxDownloading { out[mlxId] = Self.isModelCached(repoId: mlxId) }
             for id in llmIds where !downloading.contains(id) {
                 out[id] = Self.isModelCached(repoId: id)
             }
             return out
         }.value
-        // OR upgrade: 한번 true로 기록된 건 유지
         for (id, exists) in fresh where exists {
             modelCacheStates[id] = true
-        }
-        if (modelCacheStates[mlxId] ?? false), mlxAudioDownloadState == .notDownloaded {
-            mlxAudioDownloadState = .ready
         }
     }
 
@@ -180,11 +159,6 @@ final class ModelManager: ObservableObject {
     /// 이후 일반 리프레시는 OR upgrade only(`refreshAllCacheStates`)로 수행.
     private func reconcileWithDisk() {
         modelCacheStates[Self.whisperKitRepoId] = Self.isWhisperKitCached()
-
-        let mlxId = appState.settings.mlxAudioModelId
-        let mlxCached = Self.isModelCached(repoId: mlxId)
-        modelCacheStates[mlxId] = mlxCached
-        mlxAudioDownloadState = mlxCached ? .ready : .notDownloaded
 
         for spec in LocalModelSpec.supported {
             modelCacheStates[spec.id] = Self.isModelCached(repoId: spec.id)
@@ -277,7 +251,7 @@ final class ModelManager: ObservableObject {
     // MARK: - Provider 로딩 (앱 시작 시)
 
     func loadModelsIfAvailable() async {
-        await appState.switchSTTProvider(to: appState.settings.sttProviderType)
+        await appState.switchSTTProvider(to: .whisperKit)
         await appState.switchLLMProvider(to: appState.settings.llmProviderType)
         refreshAllCacheStates()
 
@@ -362,35 +336,23 @@ final class ModelManager: ObservableObject {
         }
 
         do {
-            if spec?.runtime == .python {
-                let provider = MLXLMPythonProvider(
-                    modelId: modelId,
-                    revision: spec?.revision ?? ""
-                ) { [weak self] phase in
-                    guard let self else { return }
-                    switch phase {
-                    case .uvSync:
-                        self.downloadProgress.removeValue(forKey: modelId)
-                    case let .downloading(progress):
-                        self.downloadProgress[modelId] = progress
-                    case .loading:
-                        self.downloadProgress.removeValue(forKey: modelId)
-                    }
-                }
-                try await provider.setup()
-                await provider.teardown()
-            } else {
-                let config = ModelConfiguration(
-                    id: modelId,
-                    revision: spec?.revision ?? ""
-                )
-                let _ = try await LLMModelFactory.shared.loadContainer(
-                    from: SerialHubDownloader(),
-                    using: #huggingFaceTokenizerLoader(),
-                    configuration: config,
-                    progressHandler: progressHandler
+            guard let spec else {
+                throw NSError(
+                    domain: "ModelManager",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "허용되지 않은 LLM 모델입니다."]
                 )
             }
+            let config = ModelConfiguration(
+                id: spec.id,
+                revision: spec.revision
+            )
+            let _ = try await LLMModelFactory.shared.loadContainer(
+                from: SerialHubDownloader(),
+                using: #huggingFaceTokenizerLoader(),
+                configuration: config,
+                progressHandler: progressHandler
+            )
             modelCacheStates[modelId] = true
         } catch is CancellationError {
             // 유저 취소 — 에러 메시지 노출 안 함
@@ -442,38 +404,14 @@ final class ModelManager: ObservableObject {
     // MARK: - STT 다운로드
 
     func downloadWhisperKitModel() async {
-        let originalType = appState.settings.sttProviderType
         isWhisperKitDownloading = true
         downloadProgress[Self.whisperKitRepoId] = 0
 
         await appState.switchSTTProvider(to: .whisperKit)
         modelCacheStates[Self.whisperKitRepoId] = appState.whisperModelState.isReady
 
-        if originalType != .whisperKit {
-            await appState.switchSTTProvider(to: originalType)
-        }
         isWhisperKitDownloading = false
         downloadProgress.removeValue(forKey: Self.whisperKitRepoId)
-    }
-
-    func downloadMLXAudioModel() async {
-        let originalType = appState.settings.sttProviderType
-        isMLXAudioDownloading = true
-        mlxAudioDownloadState = .loading
-
-        await appState.switchSTTProvider(to: .mlxAudio)
-
-        if appState.whisperModelState.isReady {
-            modelCacheStates[appState.settings.mlxAudioModelId] = true
-            mlxAudioDownloadState = .ready
-        } else if case let .error(msg) = appState.whisperModelState {
-            mlxAudioDownloadState = .error(msg)
-        }
-
-        if originalType != .mlxAudio {
-            await appState.switchSTTProvider(to: originalType)
-        }
-        isMLXAudioDownloading = false
     }
 
     // MARK: - 기존 메서드 (온보딩/초기 설정)
@@ -482,7 +420,7 @@ final class ModelManager: ObservableObject {
         isWhisperKitDownloading = true
         whisperModelInfo.state = .downloading(progress: 0)
         do {
-            await appState.switchSTTProvider(to: appState.settings.sttProviderType)
+            await appState.switchSTTProvider(to: .whisperKit)
             if case let .error(msg) = appState.whisperModelState {
                 throw NSError(domain: "ModelManager", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
             }
@@ -501,7 +439,7 @@ final class ModelManager: ObservableObject {
             if case let .error(msg) = appState.llmModelState {
                 throw NSError(domain: "ModelManager", code: 2, userInfo: [NSLocalizedDescriptionKey: msg])
             }
-            modelCacheStates[appState.settings.llmModelId] = true
+            modelCacheStates[LocalModelSpec.defaultModelId] = true
         } catch {
             throw error
         }
@@ -532,7 +470,7 @@ final class ModelManager: ObservableObject {
     }
 
     func deleteLLMModel() {
-        deleteLLMModel(modelId: appState.settings.llmModelId)
+        deleteLLMModel(modelId: LocalModelSpec.defaultModelId)
     }
 
     func deleteLLMModel(modelId: String) {
@@ -540,7 +478,7 @@ final class ModelManager: ObservableObject {
         if downloadingModelIds.contains(modelId) || queuedModelIds.contains(modelId) {
             cancelLLMDownload(modelId: modelId)
         }
-        if modelId == appState.settings.llmModelId {
+        if modelId == LocalModelSpec.defaultModelId {
             Task { await appState.llmProvider?.teardown() }
             appState.llmProvider = nil
             appState.llmModelState = .notDownloaded
@@ -555,19 +493,6 @@ final class ModelManager: ObservableObject {
             }
         }
         modelCacheStates[modelId] = false
-    }
-
-    func deleteMLXAudioModel() {
-        if appState.settings.sttProviderType == .mlxAudio {
-            Task { await appState.sttProvider?.teardown() }
-            appState.sttProvider = nil
-            appState.whisperModelState = .notDownloaded
-        }
-        mlxAudioDownloadState = .notDownloaded
-        modelCacheStates[appState.settings.mlxAudioModelId] = false
-        for path in modelCachePaths(repoId: appState.settings.mlxAudioModelId) {
-            try? FileManager.default.removeItem(at: path)
-        }
     }
 
     var totalDiskUsage: Int64 {
