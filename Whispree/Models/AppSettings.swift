@@ -101,6 +101,7 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
     init(store: UserDefaults = .standard, migrateHotkeys: Bool = true) {
         userDefaultsStore = store
         sanitizeLegacyProviderSelections()
+        purgeLegacyWhispreeOAuthCredentials()
         if migrateHotkeys {
             migrateHotkeysIfNeeded()
         }
@@ -137,6 +138,19 @@ final class AppSettings: ObservableObject, UserDefaultsStoreProviding {
             "whispree.restoreBrowserTab",
             "whispree.restoreTerminalContext"
         ].forEach(defaults.removeObject)
+    }
+
+    /// Remove credentials created by older Whispree OAuth implementations.
+    /// Deliberately never touches ~/.codex/auth.json because that belongs to Codex.
+    private func purgeLegacyWhispreeOAuthCredentials() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let legacyPaths = [
+            home.appendingPathComponent(".whispree/oauth.json"),
+            home.appendingPathComponent(".notmywhisper/oauth.json")
+        ]
+        for url in legacyPaths where FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     private func migrateHotkeysIfNeeded() {
