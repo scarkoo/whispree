@@ -1,17 +1,15 @@
 [project]
-name = "notmywhisper-mlx-worker"
+name = "whispree-mlx-worker"
 version = "0.1.0"
-description = "mlx-audio STT worker for NotMyWhisper"
+description = "Pinned local MLX workers for Whispree"
 requires-python = ">=3.11"
 dependencies = [
-    "mlx-audio>=0.4.3",
-    "mlx-lm>=0.31.3",
-    "mlx-vlm>=0.6.3",
-    "soundfile>=0.12.0",
-    "numpy>=2.0.0",
+    "mlx-audio==0.4.3",
+    "mlx-lm==0.31.3",
+    "soundfile==0.12.1",
+    "numpy==2.0.0",
 ]
 
 [tool.uv]
 dev-dependencies = []
-# mlx-audio 일부 버전이 transformers 5.0.0rc* (pre-release)을 요구 — 전역 허용 필요.
 prerelease = "allow"
