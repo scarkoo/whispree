@@ -1,0 +1,60 @@
+name: Harden local fork and generate locks
+
+on:
+  push:
+    branches:
+      - security/local-only-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-lock:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/local-only-hardening
+          fetch-depth: 0
+
+      - name: Install build tools
+        run: |
+          brew install xcodegen uv
+
+      - name: Generate Python lockfile
+        run: |
+          cd mlx-worker
+          uv lock
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -project Whispree.xcodeproj \
+            -scheme Whispree \
+            -resolvePackageDependencies
+
+      - name: Commit reproducibility files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mlx-worker/uv.lock Whispree.xcodeproj
+          if ! git diff --cached --quiet; then
+            git commit -m "build: lock local dependencies [skip ci]"
+            git push origin HEAD:security/local-only-hardening
+          fi
+
+      - name: Build local-only app
+        run: |
+          xcodebuild -project Whispree.xcodeproj \
+            -scheme Whispree \
+            -destination 'platform=macOS,arch=arm64' \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Validate Python sources
+        run: |
+          python3 -m py_compile mlx-worker/mlx_worker.py mlx-worker/mlx_llm_worker.py
