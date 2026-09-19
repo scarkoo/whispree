@@ -1,5 +1,4 @@
 import Foundation
-import HuggingFace
 import MLXHuggingFace
 import MLXLLM
 import MLXLMCommon
@@ -28,16 +27,20 @@ final class LocalTextProvider: LLMProvider {
     }
 
     func setup() async throws {
-        guard !revision.isEmpty else {
-            throw LLMError.correctionFailed("고정된 모델 revision이 없어 로드를 거부했습니다.")
+        guard modelId == PinnedQwenDownloader.modelID,
+              revision == PinnedQwenDownloader.revision
+        else {
+            throw LLMError.correctionFailed("검토되지 않은 로컬 LLM 모델 또는 revision입니다.")
         }
+        guard PinnedQwenDownloader.isVerifiedModelAvailable() else {
+            throw LLMError.correctionFailed("Qwen3 8B 모델을 먼저 다운로드해주세요.")
+        }
+
         MLXMemoryControl.configureInteractiveCacheLimit()
-        let config = ModelConfiguration(id: modelId, revision: revision)
         modelContainer = try await LLMModelFactory.shared.loadContainer(
-            from: #hubDownloader(),
-            using: #huggingFaceTokenizerLoader(),
-            configuration: config
-        ) { _ in }
+            from: PinnedQwenDownloader.modelDirectory,
+            using: #huggingFaceTokenizerLoader()
+        )
     }
 
     func teardown() async {
