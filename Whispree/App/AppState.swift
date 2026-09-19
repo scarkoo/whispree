@@ -27,7 +27,7 @@ final class AppState: ObservableObject {
 
     let settings: AppSettings
 
-    private let sttProviderFactory: STTProviderFactory
+    private let sttProviderFactory: STTProviderFactory?
     private var activeSTTProviderConfigurationKey: String?
     private var sttProviderLoadGeneration = 0
     private var cancellables = Set<AnyCancellable>()
@@ -45,9 +45,7 @@ final class AppState: ObservableObject {
     ) {
         let resolvedSettings = settings ?? AppSettings()
         self.settings = resolvedSettings
-        self.sttProviderFactory = sttProviderFactory ?? { _, _ in
-            WhisperKitProvider()
-        }
+        self.sttProviderFactory = sttProviderFactory
 
         resolvedSettings.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -67,8 +65,18 @@ final class AppState: ObservableObject {
         let generation = sttProviderLoadGeneration
         activeSTTProviderConfigurationKey = configurationKey
         whisperModelState = .loading
+        whisperDownloadProgress = 0
 
-        let provider = sttProviderFactory(type, settings)
+        let provider: any STTProvider
+        if let sttProviderFactory {
+            provider = sttProviderFactory(type, settings)
+        } else {
+            provider = WhisperKitProvider(downloadProgressHandler: { [weak self] fraction in
+                Task { @MainActor [weak self] in
+                    self?.whisperDownloadProgress = fraction
+                }
+            })
+        }
         let previous = sttProvider
         sttProvider = nil
         await previous?.teardown()
@@ -87,6 +95,7 @@ final class AppState: ObservableObject {
             let validation = provider.validate()
             sttProvider = provider
             if validation.isValid {
+                whisperDownloadProgress = 1
                 whisperModelState = .ready
             } else {
                 activeSTTProviderConfigurationKey = nil
@@ -96,6 +105,7 @@ final class AppState: ObservableObject {
             await provider.teardown()
             guard generation == sttProviderLoadGeneration else { return }
             activeSTTProviderConfigurationKey = nil
+            whisperDownloadProgress = 0
             whisperModelState = .error(error.localizedDescription)
         }
     }
