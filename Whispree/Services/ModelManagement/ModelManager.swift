@@ -1,7 +1,6 @@
 import Combine
 import Foundation
 import MLXLLM
-import MLXVLM
 import MLXLMCommon
 import MLXHuggingFace
 import HuggingFace
@@ -369,14 +368,6 @@ final class ModelManager: ObservableObject {
                 }
                 try await provider.setup()
                 await provider.teardown()
-            } else if spec?.capability == .vision {
-                let config = ModelConfiguration(id: modelId)
-                let _ = try await VLMModelFactory.shared.loadContainer(
-                    from: SerialHubDownloader(),
-                    using: #huggingFaceTokenizerLoader(),
-                    configuration: config,
-                    progressHandler: progressHandler
-                )
             } else {
                 let config = ModelConfiguration(id: modelId)
                 let _ = try await LLMModelFactory.shared.loadContainer(
