@@ -19,7 +19,7 @@ packages:
     exactVersion: "0.18.0"
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm
-    revision: 7e2b710
+    revision: 7e2b7107be52ffbfe488f3c7987d3f52c1858b4b
   mlx-swift:
     url: https://github.com/ml-explore/mlx-swift
     exactVersion: "0.31.3"
