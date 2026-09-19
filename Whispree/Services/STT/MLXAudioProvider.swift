@@ -19,12 +19,9 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
 
     private static func findUvPath() -> String? {
         let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser.path
-
         let candidatePaths = [
             "/opt/homebrew/bin/uv",   // Apple Silicon Homebrew
-            "/usr/local/bin/uv",      // Intel Homebrew
-            "\(home)/.local/bin/uv"  // 공식 스크립트 기본 경로
+            "/usr/local/bin/uv"       // Intel Homebrew
         ]
 
         for path in candidatePaths {
@@ -94,9 +91,6 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
         guard FileManager.default.fileExists(atPath: workerPath + "/mlx_worker.py") else {
             throw STTError.transcriptionFailed("mlx-worker/mlx_worker.py를 찾을 수 없습니다: \(workerPath)")
         }
-
-        // 고아 프로세스 정리
-        Self.killOrphanedWorkers()
 
         // Resolve strictly from the committed lockfile.
         let syncProcess = Process()
@@ -212,16 +206,6 @@ final class MLXAudioProvider: STTProvider, @unchecked Sendable {
                 continuation.finish()
             }
         }
-    }
-
-    // MARK: - Process Cleanup
-
-    private static func killOrphanedWorkers() {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        task.arguments = ["-f", "mlx_worker\\.py"]
-        try? task.run()
-        task.waitUntilExit()
     }
 
     // MARK: - IPC Helpers
