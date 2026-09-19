@@ -13,13 +13,8 @@ final class MLXLMPythonProvider: LLMProvider {
 
     typealias ProgressHandler = @MainActor @Sendable (SetupPhase) -> Void
 
-    var name: String {
-        supportsVision ? "로컬 VLM (Python)" : "로컬 LLM (Python)"
-    }
+    let name = "로컬 LLM (Python)"
     let requiresNetwork = false
-    var supportsVision: Bool {
-        LocalModelSpec.find(modelId)?.capability == .vision
-    }
 
     private var process: Process?
     private var stdinPipe: Pipe?
@@ -79,7 +74,7 @@ final class MLXLMPythonProvider: LLMProvider {
            fm.fileExists(atPath: bundlePath + "/mlx_llm_worker.py")
         {
             try? fm.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
-            for file in ["mlx_worker.py", "mlx_llm_worker.py", "pyproject.toml"] {
+            for file in ["mlx_worker.py", "mlx_llm_worker.py", "pyproject.toml", "uv.lock"] {
                 let src = bundlePath + "/" + file
                 let dst = appSupportPath + "/" + file
                 if fm.fileExists(atPath: src) {
@@ -113,7 +108,7 @@ final class MLXLMPythonProvider: LLMProvider {
         progressHandler?(.uvSync)
         let syncProcess = Process()
         syncProcess.executableURL = URL(fileURLWithPath: uvPath)
-        syncProcess.arguments = ["sync"]
+        syncProcess.arguments = ["sync", "--frozen"]
         syncProcess.currentDirectoryURL = URL(fileURLWithPath: workerPath)
         let syncStderrPipe = Pipe()
         syncProcess.standardError = syncStderrPipe
@@ -187,7 +182,7 @@ final class MLXLMPythonProvider: LLMProvider {
         try sendCommand([
             "cmd": "load",
             "model": modelId,
-            "capability": supportsVision ? "vision" : "text",
+            "capability": "text",
         ])
         let loadResp = try await readResponse(timeout: 1800)
         pollerTask?.cancel()
@@ -240,8 +235,7 @@ final class MLXLMPythonProvider: LLMProvider {
     func correct(
         text: String,
         systemPrompt: String,
-        glossary: [String]?,
-        screenshots: [Data] = []
+        glossary: [String]?
     ) async throws -> String {
         guard _isReady else { throw LLMError.modelNotLoaded }
 
@@ -250,15 +244,11 @@ final class MLXLMPythonProvider: LLMProvider {
             fullPrompt += "\n\n용어 사전 (반드시 이 형태로 보존):\n" + glossary.joined(separator: ", ")
         }
 
-        let screenshotPayload = supportsVision
-            ? screenshots.suffix(3).map { $0.base64EncodedString() }
-            : []
-
         try sendCommand([
             "cmd": "correct",
             "system_prompt": fullPrompt,
             "user_text": text,
-            "screenshots": Array(screenshotPayload),
+            "screenshots": [] as [String],
             "max_tokens": 2000,
             "temperature": 0.0,
         ])
