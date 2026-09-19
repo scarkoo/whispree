@@ -355,7 +355,10 @@ final class ModelManager: ObservableObject {
 
         do {
             if spec?.runtime == .python {
-                let provider = MLXLMPythonProvider(modelId: modelId) { [weak self] phase in
+                let provider = MLXLMPythonProvider(
+                    modelId: modelId,
+                    revision: spec?.revision ?? ""
+                ) { [weak self] phase in
                     guard let self else { return }
                     switch phase {
                     case .uvSync:
@@ -369,7 +372,10 @@ final class ModelManager: ObservableObject {
                 try await provider.setup()
                 await provider.teardown()
             } else {
-                let config = ModelConfiguration(id: modelId)
+                let config = ModelConfiguration(
+                    id: modelId,
+                    revision: spec?.revision ?? ""
+                )
                 let _ = try await LLMModelFactory.shared.loadContainer(
                     from: SerialHubDownloader(),
                     using: #huggingFaceTokenizerLoader(),
