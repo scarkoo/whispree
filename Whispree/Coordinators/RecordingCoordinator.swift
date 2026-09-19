@@ -309,7 +309,7 @@ final class RecordingCoordinator: ObservableObject {
     private func makeJobSnapshot() -> DictationJobSnapshot {
         let enabledSets = appState.settings.domainWordSets.filter(\.isEnabled)
         return DictationJobSnapshot(
-            sttProviderType: appState.settings.sttProviderType,
+            sttProviderType: .whisperKit,
             llmProviderType: appState.settings.llmProviderType,
             llmEnabled: appState.settings.isLLMEnabled,
             sttProviderConfigKey: currentSTTProviderConfigKey(),
@@ -336,13 +336,13 @@ final class RecordingCoordinator: ObservableObject {
     }
 
     private func currentSTTProviderConfigKey() -> String {
-        appState.sttProviderConfigurationKey(for: appState.settings.sttProviderType)
+        appState.sttProviderConfigurationKey(for: .whisperKit)
     }
 
     private func currentLLMProviderConfigKey() -> String {
         switch appState.settings.llmProviderType {
         case .none: "none"
-        case .local: "local:\(appState.settings.llmModelId)"
+        case .local: "local:\(LocalModelSpec.defaultModelId)"
         }
     }
 
