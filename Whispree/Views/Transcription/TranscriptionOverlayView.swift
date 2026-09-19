@@ -92,7 +92,7 @@ struct TranscriptionOverlayView: View {
         case .inserting:
             Image(systemName: "checkmark.circle")
                 .foregroundStyle(DesignTokens.semanticColors(for: .success).foreground)
-        case .idle, .selectingScreenshots:
+        case .idle:
             Image(systemName: "mic")
                 .foregroundStyle(.secondary)
         }
