@@ -46,11 +46,17 @@ targets:
           - "Services/Auth/**"
           - "Services/ScreenCapture/**"
           - "Services/MediaPlayback/**"
+          - "Services/BrowserContext/**"
+          - "Services/TerminalContext/**"
           - "Services/LLM/OpenAIProvider.swift"
           - "Services/LLM/OpenAICompatibleProvider.swift"
           - "Services/LLM/GroqLLMProvider.swift"
           - "Services/LLM/LocalVisionProvider.swift"
           - "Services/STT/GroqSTTProvider.swift"
+          - "Models/OpenAIModels.swift"
+          - "Models/GroqLLMModel.swift"
+          - "Models/CapturedScreenshot.swift"
+          - "Views/ScreenshotSelectionView.swift"
     resources:
       - path: Whispree/Resources/Assets.xcassets
     postBuildScripts:
@@ -93,7 +99,6 @@ targets:
     entitlements:
       path: Whispree/Resources/Whispree.entitlements
       properties:
-        com.apple.security.automation.apple-events: true
         com.apple.security.device.audio-input: true
         com.apple.security.network.client: true
 
@@ -105,6 +110,9 @@ targets:
         excludes:
           - "E2E/**"
           - "Services/LLMServiceTests.swift"
+          - "Services/BrowserContextServiceTests.swift"
+          - "Models/AppSettingsTests.swift"
+          - "Models/DictationQueueTests.swift"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.scarkoo.whispree.tests
