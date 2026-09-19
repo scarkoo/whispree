@@ -105,7 +105,7 @@ final class MLXLMPythonProvider: LLMProvider {
     func setup() async throws {
         guard let uvPath = Self.findUvPath() else {
             throw LLMError.correctionFailed(
-                "uv가 설치되어 있지 않습니다. `curl -LsSf https://astral.sh/uv/install.sh | sh`로 설치하세요."
+                "uv가 설치되어 있지 않습니다. Homebrew에서 `brew install uv`로 설치하세요."
             )
         }
         guard FileManager.default.fileExists(atPath: workerPath + "/mlx_llm_worker.py") else {
