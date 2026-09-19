@@ -50,7 +50,6 @@ struct ModelSettingsView: View {
                         switch appState.settings.sttProviderType {
                         case .whisperKit: return 1_500_000_000
                         case .mlxAudio: return 1_000_000_000
-                        case .groq: return 0
                         }
                     }()
 
@@ -94,7 +93,6 @@ struct ModelSettingsView: View {
                                 ),
                                 state: state,
                                 isSelected: isSelected,
-                                supportsVision: spec.capability == .vision,
                                 downloadedBytes: bytes,
                                 totalBytes: spec.sizeBytes,
                                 onDownload: { Task { await modelManager.downloadLLMModel(modelId: spec.id) } },
@@ -170,7 +168,6 @@ struct DownloadableModelRow: View {
     let metrics: ModelMetrics
     let state: ModelState
     var isSelected: Bool = false
-    var supportsVision: Bool = false
     var downloadedBytes: Int64? = nil
     var totalBytes: Int64? = nil
     let onDownload: () -> Void
@@ -184,12 +181,6 @@ struct DownloadableModelRow: View {
                     HStack(spacing: 6) {
                         Text(name)
                             .font(.subheadline.weight(.medium))
-
-                        if supportsVision {
-                            Text("Vision")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(DesignTokens.accentPrimary)
-                        }
 
                         if isSelected {
                             Text("사용 중")
