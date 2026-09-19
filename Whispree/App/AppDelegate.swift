@@ -348,7 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.onboardingWindow = nil
                     self.showMainWindow()
                     Task {
-                        await self.appState.switchSTTProvider(to: self.appState.settings.sttProviderType)
+                        await self.appState.switchSTTProvider(to: .whisperKit)
                         await self.appState.switchLLMProvider(to: self.appState.settings.llmProviderType)
                     }
                 }
