@@ -1,205 +1,118 @@
-# Whispree
+# Whispree Local
 
-> Start voice-coding with just an OpenAI account. For free.
+Apple Silicon Mac에서 **완전 로컬 추론과 보안 우선**을 목표로 강화한 Whispree fork입니다.
 
-[한국어](README.ko.md) | English
+## 핵심 구성
 
-![License](https://img.shields.io/github/license/Arsture/whispree)
-![Version](https://img.shields.io/github/v/release/Arsture/whispree)
-![Build](https://img.shields.io/github/actions/workflow/status/Arsture/whispree/release.yml)
-![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
+런타임은 Swift 네이티브 경로만 사용합니다.
 
-<p align="center">
-  <img src="assets/english-demo.png" alt="Whispree English Demo" width="720">
-</p>
+- STT: **WhisperKit Large V3 Turbo** 고정
+- LLM: **mlx-community/Qwen3-8B-4bit** 고정
+- Python 런타임 없음
+- uv / pip / virtualenv 없음
+- 별도 worker process / stdin·stdout IPC 없음
+- Cloud inference provider 없음
 
-## Features
+WhisperKit CoreML 모델과 tokenizer, Qwen3 8B 모델은 모두 검토된 **immutable commit SHA**로 revision을 고정합니다.
 
-### Voice-to-Prompt
+## 보안 설계
 
-Whispree is an app that lets you **talk to AI instead of typing**. Place your cursor in any prompt input — Cursor, Claude, ChatGPT — hit a hotkey, and speak. The corrected text is automatically pasted right where your cursor was.
+이 fork에서 제거한 기능:
 
-3–5x faster than typing, and your train of thought stays intact. Even if you switch windows while recording, Whispree remembers the original focus position and inserts text exactly there.
+- Groq 등 Cloud STT
+- OpenAI / OpenAI-compatible / Groq LLM
+- Codex CLI 인증 파일 접근 및 OpenAI OAuth
+- MLX Audio / Python `mlx-audio`
+- Python `mlx-lm` worker
+- 화면 캡처, Screen Context, 이미지 붙여넣기, Vision 모델
+- MediaRemoteAdapter 및 미디어 제어
+- Chrome / iTerm AppleEvents 자동화
+- iCloud / 공유 사전 동기화
+- Sparkle 자동 업데이트와 upstream release/signing 파이프라인
+- 외부 녹음 URL scheme
+- upstream Team ID와 Bundle ID
 
-### Visual Context
+Analytics/Telemetry client, Cloud inference provider, network entitlement, Cloud sync 기능을 포함하지 않습니다.
 
-The moment you start recording, Whispree automatically captures a screenshot of the focused screen and attaches it alongside your prompt. Visual context that's hard to convey with words alone gets included automatically, so AI understands more accurately. No more manually screenshotting, finding the file, and dragging it in.
+다만 App Sandbox를 사용하지 않으므로 **고정된 모델을 최초 다운로드할 때는 네트워크를 사용**할 수 있습니다. 모델 설치 후 일반적인 음성 전사와 텍스트 교정 경로에서는 오디오나 텍스트를 원격 inference 서비스로 전송하지 않습니다.
 
-### Code-Switching Optimization
+## 로컬 모델
 
-Built for Korean developers who mix English. LLM correction handles Korean + English tech terms:
+### STT
 
-```
-"밸리데이션 해야 되거든"  →  "validation 해야 되거든"
-"리엑트 컴포넌트"        →  "React 컴포넌트"
-"깃허브에 PR 올려놨어"   →  "GitHub에 PR 올려놨어"
-```
+WhisperKit Large V3 Turbo만 지원합니다.
 
-### Correction Modes
+- CoreML + Apple Neural Engine 사용
+- 모델 repository와 tokenizer revision을 각각 commit SHA로 고정
+- 다른 STT provider 선택 기능 없음
 
-| Mode | Description |
-|------|-------------|
-| Standard | Fix STT errors — spacing, spelling, misheard words |
-| Filler Removal | STT correction + remove fillers (um, uh, like, you know) |
-| Structured (for Prompt) | STT correction + filler removal + organize into bullet points. Even rambling speech becomes a clear instruction for AI |
-| Custom | Your own custom system prompt |
+### LLM
 
-### Smart Dictation
+Qwen3 8B 4-bit만 지원합니다.
 
-Speak again while Whispree is correcting the previous utterance: new recordings are queued immediately, STT/LLM post-processing can run in parallel under provider limits, and final insertion stays FIFO so text lands in the order you spoke.
+- `mlx-community/Qwen3-8B-4bit`
+- Swift `mlx-swift-lm`에서 직접 실행
+- Hugging Face commit SHA 고정
+- Python fallback 없음
+- 다른 LLM 모델 선택 기능 없음
+- 필요하면 텍스트 교정 자체는 끌 수 있음
 
-- **Record** — `Ctrl+Shift+R` (default). Push to Talk (hold to record) or Toggle (press once to start, again to stop) modes
-- **Quick Fix** — `Ctrl+Shift+D` (default). Add misheard words to correction dictionary & Replace
-- **Cancel** — `ESC`. Cancels the current scope only: active recording, screenshot selection/delivery, or the visible foreground queued item; it never clears the whole queue.
-- All hotkeys are customizable in Settings.
+## 필요한 권한
 
-### Nearly Free
+- 마이크 — 음성 녹음
+- 손쉬운 사용(Accessibility) — 전역 단축키와 텍스트 자동 삽입
+- 화면 기록 및 AppleEvents 권한은 사용하지 않습니다.
 
-STT uses Groq, LLM borrows Codex OAuth.
-Groq STT is free, and OpenAI LLM correction uses [Codex CLI](https://github.com/openai/codex) auth tokens directly.
-If you have an OpenAI account, you get high-quality STT + LLM correction with virtually no additional cost.
+## 직접 빌드
 
-## Installation
+요구 사항:
 
-### Homebrew (Recommended)
+- macOS 14+
+- Apple Silicon
+- Xcode 16+
+- XcodeGen
 
 ```bash
-brew tap Arsture/whispree && brew install --cask whispree
-```
-
-### GitHub Releases
-
-> **Note:** The app is not notarized (no Apple Developer ID). `.zip` and `.dmg` downloads from [GitHub Releases](https://github.com/Arsture/whispree/releases) will be blocked by macOS Gatekeeper. You'll need to run `xattr -cr Whispree.app` in Terminal after extracting. **Homebrew install is strongly recommended** as it handles this automatically.
-
-### Build from Source
-
-```bash
-git clone https://github.com/Arsture/whispree.git
-cd whispree
 brew install xcodegen
+git clone https://github.com/scarkoo/whispree.git
+cd whispree
+git checkout security/local-only-hardening
 xcodegen generate
 open Whispree.xcodeproj
-# Build and run with Cmd+R in Xcode
 ```
 
-SPM dependencies are resolved automatically on first build.
+Xcode의 **Signing & Capabilities**에서 본인의 Personal Team을 선택합니다.
 
-## Usage
+저장소에는 `DEVELOPMENT_TEAM`을 고정하지 않습니다.
 
-### Basic Flow
+Bundle ID:
 
-1. **First Launch** — Grant microphone and accessibility permissions.
-2. **Download Models** — Go to Settings > Models and download the STT/LLM models you want. (Not needed for cloud providers)
-3. **Record** — Place your cursor in an AI prompt input and press `Ctrl+Shift+R`. A screenshot is automatically captured.
-4. **Insert** — Corrected text is automatically pasted where your cursor originally was. Even if you switched windows while recording, it returns to the exact position.
-
-### Quick Fix
-
-If a word keeps getting misheard, register it with `Ctrl+Shift+D`. Build domain word sets (programming, medical, etc.) to improve recognition for specific terminology.
-
-### Shared Dictionary Sync
-
-Quick Fix words and domain word sets can be shared across Macs. Turn on *Settings > General > Dictionary Sync* to mirror them to iCloud Drive automatically, or set a custom JSON path inside Dropbox, Syncthing, or another synced folder.
-
-The shared file stores the same `[DomainWordSet]` JSON used internally, so it is easy to back up or inspect.
-
-### Settings
-
-Access from the menu bar icon:
-
-- **General** — Change hotkeys, recording mode (Push to Talk / Toggle), launch at login
-- **STT** — Choose STT provider (WhisperKit, Groq, MLX Audio) + compatibility grades
-- **LLM** — Choose LLM provider (None, 6 local models, 5 OpenAI models) + correction mode
-- **Downloads** — Download/delete local models + Can I Run compatibility (RAM%, tok/s, grade)
-
-### Trigger from External Tools
-
-Whispree registers a URL scheme so external automation tools can start/stop recording without a modifier hotkey.
-
-```bash
-open "whispree://toggle"   # start/stop toggle
-open "whispree://push"     # start recording
-open "whispree://release"  # stop & transcribe
+```text
+com.scarkoo.whispree
 ```
 
-Works with **Raycast** (Create Quicklink → assign a hotkey), **Stream Deck** ("System: Open" action — two buttons for push/release), **Keyboard Maestro**, and **AppleScript**:
+본인 Mac에서 직접 빌드해 사용할 목적이라면 유료 Apple Developer Program 가입은 필요하지 않습니다.
 
-```applescript
-tell application "Whispree" to open location "whispree://toggle"
-```
+## 의존성 및 공급망 고정
 
-## Tips
+- Swift package는 exact version/revision으로 고정
+- 전체 SwiftPM graph는 `Package.resolved`로 고정
+- Hugging Face 모델은 mutable `main` 대신 commit SHA 사용
+- GitHub Actions는 `contents: read`만 사용
+- CI는 lockfile을 수정하거나 branch에 자동 push하지 않음
+- `actions/checkout`도 commit SHA로 고정
+- CI에서 SwiftPM pin drift, plist/entitlement, unsigned Release build를 검증
 
-> **Use Structured Mode by default.** If you talk to AI often, turn on Structured mode in the LLM settings. Even rambling speech gets organized into clean bullet points. The clearer the idea in your head, the bigger the payoff — the time you'd spend formatting just disappears.
+## 네트워크 경계
 
-> **Pour out your plans by speaking.** When you already have a vision in your head, typing it out is the bottleneck. Hit the hotkey and talk — Structured Mode handles the formatting. Especially in early planning, speaking is far more efficient than writing things out.
+이 프로젝트의 "로컬 전용"은 **음성/텍스트 inference를 외부 API로 보내지 않는다**는 의미입니다.
 
-> **When studying, speak the boundary of your understanding.** "I get it up to here, but this part I don't understand" — Whispree is perfect for dumping that out verbally. Articulating what you don't know in text takes forever, but speaking lets it flow naturally.
+모델 최초 다운로드에는 Hugging Face 등의 네트워크 접근이 필요합니다. 또한 App Sandbox를 사용하지 않기 때문에 entitlement 제거만으로 운영체제 수준의 outbound network 차단이 적용되는 것은 아닙니다.
 
-> **Make full use of screenshots.** During recording, screenshots are captured automatically as you look at different windows. Switching tabs instantly captures the previous one, and pausing on a screen for 1.5 seconds triggers a capture. Every screen you look at gets recorded. After recording, a selection panel lets you choose which screenshots to attach to your AI prompt. With Vision-capable models like OpenAI, the LLM references screenshots during correction — so even formulas and technical terms get fixed accurately. Look at an equation in a paper and say "I don't understand this part," and both the screenshot and your voice go to the AI together.
+모델 설치 후 더 강한 네트워크 격리가 필요하다면 macOS outbound firewall을 별도로 적용할 수 있습니다.
 
-> **When you can't organize your thoughts, just type.** Speaking is faster when your thoughts are clear; typing helps you think when they're not. Whispree is closer to "a tool for quickly delivering what you already know."
+## 원본 프로젝트
 
-> **Office Worker Tip**: Wear AirPods and pretend you're on a call. Nobody will think you're talking to objects.
+https://github.com/Arsture/whispree
 
-## Choose Your Providers
-
-Wants to be [OpenCode](https://github.com/nicepkg/opencode). Still a long way to go, but you can pick and choose STT and LLM providers.
-
-| | STT | LLM |
-|---|---|---|
-| **Cloud (Recommended)** | [Groq](https://groq.com/) — accurate, fast | [OpenAI via Codex CLI](https://github.com/openai/codex) — use your existing account |
-| **Local** | [WhisperKit](https://github.com/argmaxinc/WhisperKit) — CoreML+ANE, decent accuracy | [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) + Python MLX workers — local text/VLM models |
-| **Local** | [MLX Audio](https://github.com/ml-explore/mlx-audio) — fast, lightweight | [MLXVLM](https://github.com/ml-explore/mlx-swift-lm) — vision model (screenshot context) |
-
-### Supported Models
-
-The built-in **Can I Run** feature detects your hardware (chip, RAM, bandwidth) and shows compatibility grades for each model.
-
-#### STT (Speech Recognition)
-
-| Provider | Model | Size | Type |
-|----------|-------|------|------|
-| **Groq** | `whisper-large-v3-turbo` | ☁️ | Cloud |
-| **WhisperKit** | `openai_whisper-large-v3_turbo` | ~1.5 GB | Local (CoreML+ANE) |
-| **MLX Audio** | `Qwen3-ASR-1.7B-8bit` | ~1.0 GB | Local (Python worker) |
-
-#### LLM (Text Correction)
-
-| Provider | Model | Size | Notes |
-|----------|-------|------|-------|
-| **OpenAI** | `gpt-5.6-sol` (default), `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, `gpt-5.2` | ☁️ | Best quality |
-| **Local Text** | `Qwen3-1.7B-4bit` | ~940 MB | Lightweight, fast |
-| **Local Text** | `Qwen3-4B-Instruct-2507-4bit` (default) | ~2.1 GB | Balanced default |
-| **Local Text** | `Qwen3-8B-4bit` | ~4.3 GB | High-quality Korean |
-| **Local Text** | `Qwen3-Coder-30B-A3B-Instruct-4bit` | ~16 GB | MoE coding (32GB+ recommended) |
-| **Local Text** | `GLM-4.7-Flash-4bit` | ~16 GB | Chinese/Korean (32GB+ recommended) |
-| **Local Vision** | `Qwen3-VL-4B-Instruct-8bit` | ~4.8 GB | Screenshot context |
-| **Local Vision** | `diffusiongemma-26B-A4B-it-4bit` | ~15.6 GB | DiffusionGemma VLM via Python MLX worker (32GB+ recommended) |
-
-## Requirements
-
-- macOS 14.0+ (Sonoma)
-- Apple Silicon (M1/M2/M3/M4)
-- Microphone permission
-- Accessibility permission (required for automatic text insertion)
-
-## The Name
-
-> It started as **FreeWhisper**. Just a tool for me, so I built it in Swift for Mac.
->
-> When I decided to open-source it, FreeWhisper felt cheap. "Oh My ..." series felt dated, and **OpenWhisper** seemed taken.
->
-> I thought about borrowing API keys — borrowed cat? Borrowed Whisper? **Not My Whisper**!? (Not cute anymore) came to mind.
->
-> But as I kept using it, I got attached. *"Wait, this IS my whisper."*
->
-> So it became **Whispree**.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## License
-
-[MIT](LICENSE)
+이 fork는 provider 다양성과 확장성보다 **개인정보 보호, 재현 가능한 공급망, 작은 공격 표면**을 우선합니다.

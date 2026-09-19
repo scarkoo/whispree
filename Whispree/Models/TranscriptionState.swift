@@ -23,7 +23,6 @@ enum TranscriptionState: Equatable {
     case transcribing
     case correcting
     case inserting
-    case selectingScreenshots
 
     var displayText: String {
         switch self {
@@ -32,7 +31,6 @@ enum TranscriptionState: Equatable {
             case .transcribing: String(localized: "Transcribing...")
             case .correcting: String(localized: "Correcting...")
             case .inserting: String(localized: "Inserting text...")
-            case .selectingScreenshots: String(localized: "Select screenshots")
         }
     }
 

@@ -1,10 +1,7 @@
 import Foundation
 
-/// Stable identifier for a queued dictation job.
 typealias DictationJobID = UUID
 
-/// Resource backing for recorded audio. G001 keeps in-memory payloads; later
-/// resource-pressure work can spill to a temp URL without changing queue logic.
 enum DictationAudioPayload: Equatable {
     case memory([Float])
     case tempFile(URL)
@@ -30,8 +27,6 @@ enum DictationResourceState: Equatable {
     case spilled(URL)
 }
 
-/// Immutable capture/settings snapshot. A queued job must use this snapshot even
-/// if the user changes settings or providers while it waits or processes.
 struct DictationJobSnapshot: Equatable {
     let sttProviderType: STTProviderType
     let llmProviderType: LLMProviderType
@@ -44,8 +39,6 @@ struct DictationJobSnapshot: Equatable {
     let glossary: [String]
     let domainWordSets: [DomainWordSet]
     let correctionMappings: [CorrectionMapping]
-    let screenshotContextEnabled: Bool
-    let screenshotPasteEnabled: Bool
     let hasCompletedOnboarding: Bool
     let vadEnabled: Bool
 
@@ -61,8 +54,6 @@ struct DictationJobSnapshot: Equatable {
         glossary: [String] = [],
         domainWordSets: [DomainWordSet] = [],
         correctionMappings: [CorrectionMapping] = [],
-        screenshotContextEnabled: Bool = false,
-        screenshotPasteEnabled: Bool = false,
         hasCompletedOnboarding: Bool = true,
         vadEnabled: Bool = true
     ) {
@@ -77,8 +68,6 @@ struct DictationJobSnapshot: Equatable {
         self.glossary = glossary
         self.domainWordSets = domainWordSets
         self.correctionMappings = correctionMappings
-        self.screenshotContextEnabled = screenshotContextEnabled
-        self.screenshotPasteEnabled = screenshotPasteEnabled
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.vadEnabled = vadEnabled
     }
@@ -89,7 +78,6 @@ enum DictationJobStatus: Equatable {
     case transcribing
     case correcting
     case readyForDelivery
-    case awaitingScreenshotSelection
     case delivering
     case delivered
     case copiedToClipboard
@@ -99,30 +87,19 @@ enum DictationJobStatus: Equatable {
 
     var isTerminal: Bool {
         switch self {
-        case .delivered, .copiedToClipboard, .failed, .canceled, .skipped:
-            true
-        default:
-            false
+        case .delivered, .copiedToClipboard, .failed, .canceled, .skipped: true
+        default: false
         }
     }
 
     var isProcessing: Bool {
         switch self {
-        case .queued, .transcribing, .correcting:
-            true
-        default:
-            false
+        case .queued, .transcribing, .correcting: true
+        default: false
         }
     }
 
-    var isDeliverable: Bool {
-        switch self {
-        case .readyForDelivery, .awaitingScreenshotSelection:
-            true
-        default:
-            false
-        }
-    }
+    var isDeliverable: Bool { self == .readyForDelivery }
 }
 
 struct DictationJob {
@@ -133,20 +110,11 @@ struct DictationJob {
     var audio: DictationAudioPayload
     var resourceState: DictationResourceState
     var targetContext: ExternalContext?
-    var screenshots: [CapturedScreenshot]
-    var selectedImages: [Data]
-    var transcribedText: String
-    var correctedText: String
-    var status: DictationJobStatus
-    var ownsSTTPermit: Bool
-    var ownsLLMPermit: Bool
-
-    /// Whether this job must go through screenshot review before insertion.
-    /// This is queue truth, not a UI decision: delivery admission reads it synchronously
-    /// so the projected UI state can never disagree with what `deliver()` will do.
-    var needsScreenshotSelection: Bool {
-        snapshot.hasCompletedOnboarding && snapshot.screenshotPasteEnabled && !screenshots.isEmpty
-    }
+    var transcribedText = ""
+    var correctedText = ""
+    var status: DictationJobStatus = .queued
+    var ownsSTTPermit = false
+    var ownsLLMPermit = false
 
     init(
         id: DictationJobID = UUID(),
@@ -155,8 +123,7 @@ struct DictationJob {
         snapshot: DictationJobSnapshot,
         audio: DictationAudioPayload,
         resourceState: DictationResourceState = .normal,
-        targetContext: ExternalContext? = nil,
-        screenshots: [CapturedScreenshot] = []
+        targetContext: ExternalContext? = nil
     ) {
         self.id = id
         self.sequence = sequence
@@ -165,13 +132,6 @@ struct DictationJob {
         self.audio = audio
         self.resourceState = resourceState
         self.targetContext = targetContext
-        self.screenshots = screenshots
-        self.selectedImages = []
-        self.transcribedText = ""
-        self.correctedText = ""
-        self.status = .queued
-        self.ownsSTTPermit = false
-        self.ownsLLMPermit = false
     }
 }
 
@@ -194,9 +154,7 @@ struct DictationQueueSnapshot: Equatable {
         foregroundJobSequence: nil
     )
 
-    var activeCount: Int {
-        totalCount - terminalCount
-    }
+    var activeCount: Int { totalCount - terminalCount }
 }
 
 struct DictationProviderConcurrencyPolicy: Equatable {
@@ -209,23 +167,12 @@ struct DictationProviderConcurrencyPolicy: Equatable {
     }
 
     static func limits(sttProvider: STTProviderType, llmProvider: LLMProviderType) -> Self {
-        let sttLimit: Int = switch sttProvider {
-        case .whisperKit, .mlxAudio: 1
-        case .groq: 2
-        }
-
-        let llmLimit: Int = switch llmProvider {
-        case .none: Int.max / 4
-        case .local: 1
-        case .openai, .openaiCompatible, .groq: 2
-        }
-
+        let sttLimit: Int = 1
+        let llmLimit: Int = llmProvider == .local ? 1 : Int.max / 4
         return Self(sttLimit: sttLimit, llmLimit: llmLimit)
     }
 }
 
-/// Test-visible queue state machine. The coordinator will own one instance and
-/// attach real provider tasks in later stories.
 @MainActor
 final class DictationQueueState {
     private(set) var jobs: [DictationJob] = []
@@ -250,55 +197,34 @@ final class DictationQueueState {
     }
 
     var foregroundJobID: DictationJobID? {
-        if let activeDeliveryJobID { return activeDeliveryJobID }
-        return jobs.first { !$0.status.isTerminal }?.id
+        activeDeliveryJobID ?? jobs.first { !$0.status.isTerminal }?.id
     }
 
-    func setRecordingActive(_ active: Bool) {
-        isRecordingActive = active
-    }
+    func setRecordingActive(_ active: Bool) { isRecordingActive = active }
 
     @discardableResult
     func enqueue(
         snapshot: DictationJobSnapshot,
         audio: DictationAudioPayload,
         targetContext: ExternalContext? = nil,
-        screenshots: [CapturedScreenshot] = [],
         resourceState: DictationResourceState = .normal
     ) -> DictationJobID? {
         guard !audio.isEmpty else { return nil }
-        let job = DictationJob(
+        jobs.append(DictationJob(
             sequence: nextSequence,
             snapshot: snapshot,
             audio: audio,
             resourceState: resourceState,
-            targetContext: targetContext,
-            screenshots: screenshots
-        )
+            targetContext: targetContext
+        ))
         nextSequence += 1
-        jobs.append(job)
-        return job.id
+        return jobs.last?.id
     }
 
-    func job(id: DictationJobID) -> DictationJob? {
-        jobs.first { $0.id == id }
-    }
-
-    func nonTerminalJobs() -> [DictationJob] {
-        jobs.filter { !$0.status.isTerminal }.sorted { $0.sequence < $1.sequence }
-    }
-
-    func transcribingJobIDs() -> [DictationJobID] {
-        jobs.filter { $0.status == .transcribing }.map(\.id)
-    }
-
-    func correctingJobIDs() -> [DictationJobID] {
-        jobs.filter { $0.status == .correcting }.map(\.id)
-    }
-
-    func sequenceForJob(_ id: DictationJobID) -> Int? {
-        job(id: id)?.sequence
-    }
+    func job(id: DictationJobID) -> DictationJob? { jobs.first { $0.id == id } }
+    func transcribingJobIDs() -> [DictationJobID] { jobs.filter { $0.status == .transcribing }.map(\.id) }
+    func correctingJobIDs() -> [DictationJobID] { jobs.filter { $0.status == .correcting }.map(\.id) }
+    func sequenceForJob(_ id: DictationJobID) -> Int? { job(id: id)?.sequence }
 
     func startNextSTT() -> DictationJobID? {
         guard let index = jobs.firstIndex(where: { job in
@@ -316,8 +242,7 @@ final class DictationQueueState {
     }
 
     func completeSTT(jobID: DictationJobID, text: String, requiresLLM: Bool) {
-        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { return }
-        guard !jobs[index].status.isTerminal else { return }
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }), !jobs[index].status.isTerminal else { return }
         releaseSTTPermitIfNeeded(index: index)
         jobs[index].transcribedText = text
         jobs[index].status = requiresLLM ? .correcting : .readyForDelivery
@@ -342,73 +267,36 @@ final class DictationQueueState {
     }
 
     func completeLLM(jobID: DictationJobID, correctedText: String?) {
-        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { return }
-        guard !jobs[index].status.isTerminal else { return }
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }), !jobs[index].status.isTerminal else { return }
         releaseLLMPermitIfNeeded(index: index)
         jobs[index].correctedText = correctedText ?? ""
         jobs[index].status = .readyForDelivery
-    }
-
-    func setSelectedImages(jobID: DictationJobID, images: [Data]) {
-        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { return }
-        jobs[index].selectedImages = images
-    }
-
-    func updateTargetContext(jobID: DictationJobID, targetContext: ExternalContext) {
-        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { return }
-        guard !jobs[index].status.isTerminal else { return }
-        jobs[index].targetContext = targetContext
     }
 
     func failLLMFallbackToRaw(jobID: DictationJobID) {
         completeLLM(jobID: jobID, correctedText: nil)
     }
 
-    func nextDeliveryHeadID() -> DictationJobID? {
-        jobs
-            .filter { !$0.status.isTerminal }
-            .sorted { $0.sequence < $1.sequence }
-            .first?
-            .id
-    }
-
     func startDeliveryIfPossible() -> DictationJobID? {
         guard !isRecordingActive, activeDeliveryJobID == nil,
-              let headID = nextDeliveryHeadID(),
-              let index = jobs.firstIndex(where: { $0.id == headID }),
-              jobs[index].status.isDeliverable
+              let headIndex = jobs.indices
+                .filter({ !jobs[$0].status.isTerminal })
+                .sorted(by: { jobs[$0].sequence < jobs[$1].sequence })
+                .first,
+              jobs[headIndex].status == .readyForDelivery
         else { return nil }
-        activeDeliveryJobID = headID
-        // Screenshot review is entered here, synchronously, and not later inside the
-        // delivery task. Callers project UI state from queue truth immediately after this
-        // returns; if the job sat in `.delivering` until the async task body ran, the
-        // projection would publish "inserting" first and tear the selection panel down
-        // before the user could ever use it.
-        jobs[index].status = jobs[index].needsScreenshotSelection
-            ? .awaitingScreenshotSelection
-            : .delivering
-        return headID
-    }
 
-    /// Screenshot review finished for the active delivery job — proceed to insertion.
-    func beginDeliveryAfterScreenshotSelection(jobID: DictationJobID) {
-        guard let index = jobs.firstIndex(where: { $0.id == jobID }),
-              activeDeliveryJobID == jobID,
-              jobs[index].status == .awaitingScreenshotSelection
-        else { return }
-        jobs[index].status = .delivering
+        activeDeliveryJobID = jobs[headIndex].id
+        jobs[headIndex].status = .delivering
+        return jobs[headIndex].id
     }
 
     func pauseActiveDeliveryForRecording(jobID: DictationJobID) {
-        // `.awaitingScreenshotSelection` must be accepted here: starting a new recording
-        // while the selection panel is open goes through this path, and the job is not in
-        // `.delivering` at that point.
         guard let index = jobs.firstIndex(where: { $0.id == jobID }),
               activeDeliveryJobID == jobID,
-              jobs[index].status == .delivering || jobs[index].status == .awaitingScreenshotSelection
+              jobs[index].status == .delivering
         else { return }
         activeDeliveryJobID = nil
-        jobs[index].selectedImages = []
         jobs[index].status = .readyForDelivery
     }
 
@@ -416,25 +304,16 @@ final class DictationQueueState {
         markTerminal(jobID: jobID, status: copiedFallback ? .copiedToClipboard : .delivered)
     }
 
-    func skipJob(jobID: DictationJobID) {
-        markTerminal(jobID: jobID, status: .skipped)
-    }
-
-    func cancelJob(jobID: DictationJobID) {
-        markTerminal(jobID: jobID, status: .canceled)
-    }
+    func skipJob(jobID: DictationJobID) { markTerminal(jobID: jobID, status: .skipped) }
+    func cancelJob(jobID: DictationJobID) { markTerminal(jobID: jobID, status: .canceled) }
 
     private func markTerminal(jobID: DictationJobID, status: DictationJobStatus) {
-        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { return }
-        guard !jobs[index].status.isTerminal else { return }
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }), !jobs[index].status.isTerminal else { return }
         releaseSTTPermitIfNeeded(index: index)
         releaseLLMPermitIfNeeded(index: index)
         cleanupHeavyPayloads(index: index)
-        jobs[index].selectedImages = []
         jobs[index].status = status
-        if activeDeliveryJobID == jobID {
-            activeDeliveryJobID = nil
-        }
+        if activeDeliveryJobID == jobID { activeDeliveryJobID = nil }
         pruneOldTerminalJobsIfNeeded()
     }
 
@@ -458,19 +337,16 @@ final class DictationQueueState {
         }
         jobs[index].audio = .memory([])
         jobs[index].targetContext = nil
-        jobs[index].screenshots = []
-        jobs[index].selectedImages = []
     }
 
     private func pruneOldTerminalJobsIfNeeded() {
         let terminalJobs = jobs.filter(\.status.isTerminal)
         guard terminalJobs.count > terminalRetentionLimit else { return }
-        let removableSequences = Set(
-            terminalJobs
-                .sorted { $0.sequence < $1.sequence }
+        let removable = Set(
+            terminalJobs.sorted { $0.sequence < $1.sequence }
                 .prefix(terminalJobs.count - terminalRetentionLimit)
                 .map(\.sequence)
         )
-        jobs.removeAll { removableSequences.contains($0.sequence) }
+        jobs.removeAll { removable.contains($0.sequence) }
     }
 }

@@ -19,7 +19,7 @@ struct ModelInfo: Identifiable {
         id: "openai_whisper-large-v3_turbo",
         name: "Whisper Large V3 Turbo",
         description: String(localized: "Fast and accurate STT model supporting 99 languages"),
-        sizeBytes: 1_500_000_000,
+        sizeBytes: 3_200_000_000,
         huggingFaceRepo: "argmaxinc/whisperkit-coreml"
     )
 

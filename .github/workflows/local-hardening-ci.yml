@@ -1,0 +1,73 @@
+name: Verify local-only hardening
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-local-only:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+
+      - name: Install build tools
+        run: brew install xcodegen
+
+      - name: Preserve committed SwiftPM pins
+        run: |
+          LOCK=Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          test -f "$LOCK"
+          plutil -extract pins json -o "$RUNNER_TEMP/pins-before.json" "$LOCK"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Validate security manifests
+        run: |
+          plutil -lint Whispree/Resources/Info.plist
+          plutil -lint Whispree/Resources/Whispree.entitlements
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -project Whispree.xcodeproj \
+            -scheme Whispree \
+            -resolvePackageDependencies
+
+      - name: Verify SwiftPM pins are unchanged
+        run: |
+          LOCK=Whispree.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          plutil -extract pins json -o "$RUNNER_TEMP/pins-after.json" "$LOCK"
+          if ! cmp -s "$RUNNER_TEMP/pins-before.json" "$RUNNER_TEMP/pins-after.json"; then
+            echo "SwiftPM resolved pins changed; update and review Package.resolved locally"
+            diff -u "$RUNNER_TEMP/pins-before.json" "$RUNNER_TEMP/pins-after.json" || true
+            exit 1
+          fi
+
+      - name: Build local-only app
+        run: |
+          # mlx-swift-lm contains a pinned Swift macro target. Hosted CI cannot
+          # interactively approve macro trust, so only macro validation is skipped.
+          # Package plugin validation remains enabled.
+          xcodebuild -project Whispree.xcodeproj \
+            -scheme Whispree \
+            -destination 'platform=macOS,arch=arm64' \
+            -configuration Release \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+

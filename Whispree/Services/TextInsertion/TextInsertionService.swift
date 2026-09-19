@@ -1,9 +1,8 @@
 import AppKit
 import ApplicationServices
-import Carbon.HIToolbox
 
 final class TextInsertionService {
-    /// 클립보드 복원 Task — 이미지 붙여넣기 시작 시 취소해야 함
+    /// 클립보드 복원 Task
     private var clipboardRestoreTask: Task<Void, Never>?
     func insertText(_ text: String, targetApp: NSRunningApplication? = nil) async -> Bool {
         // 유효한 외부 앱이 있으면 활성화 + Cmd+V
@@ -99,7 +98,6 @@ final class TextInsertionService {
         keyUp.post(tap: .cgAnnotatedSessionEventTap)
 
         // Restore clipboard after delay (async, non-blocking)
-        // 이미지 붙여넣기가 뒤따르면 이 Task는 취소됨
         clipboardRestoreTask = Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s
             guard !Task.isCancelled else { return }
@@ -110,98 +108,6 @@ final class TextInsertionService {
         }
 
         return true
-    }
-
-    // MARK: - Image Paste
-
-    /// 캡처된 스크린샷들을 대상 앱에 이미지로 순서대로 붙여넣기
-    /// 흐름: 영어 입력소스 전환 → 각 이미지(클립보드 복사 → Ctrl+V → Cmd+V) → 입력소스 복원
-    @MainActor
-    func insertImages(_ images: [Data], targetApp: NSRunningApplication? = nil) async {
-        guard !images.isEmpty else { return }
-
-        // 텍스트 삽입의 클립보드 복원 Task 취소 — 이미지 붙여넣기 도중에 prev 복원 방지
-        clipboardRestoreTask?.cancel()
-        clipboardRestoreTask = nil
-
-        // 대상 앱이 이미 활성화되어 있어야 함
-        if let target = targetApp,
-           target.bundleIdentifier != Bundle.main.bundleIdentifier
-        {
-            let isFront = NSWorkspace.shared.frontmostApplication?.processIdentifier == target.processIdentifier
-            if !isFront {
-                _ = await activateApp(target)
-            }
-        }
-
-        // 영어 입력소스로 전환 (한글 모드에서 Ctrl+V 미작동 방지)
-        let originalSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
-        switchToASCIIInputSource()
-
-        let pasteboard = NSPasteboard.general
-
-        // 취소를 포함한 모든 종료 경로에서 입력소스 복원 + 클립보드 정리를 보장
-        // (originalSource 캡처 이후에만 설치 — 위 이른 return에는 적용되지 않음)
-        defer {
-            if let original = originalSource {
-                TISSelectInputSource(original)
-            }
-            pasteboard.clearContents()
-        }
-
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        for imageData in images {
-            guard !Task.isCancelled else { break }
-
-            guard let bitmapRep = NSBitmapImageRep(data: imageData),
-                  let pngData = bitmapRep.representation(using: .png, properties: [:])
-            else { continue }
-
-            pasteboard.clearContents()
-            pasteboard.setData(pngData, forType: .png)
-
-            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2초 — 클립보드 안정화
-
-            // Ctrl+V (터미널 Claude CLI)
-            sendPasteKey(flags: .maskControl)
-            try? await Task.sleep(nanoseconds: 200_000_000)
-
-            // Cmd+V (브라우저)
-            sendPasteKey(flags: .maskCommand)
-            try? await Task.sleep(nanoseconds: 600_000_000) // 0.6초 — 웹 업로드 대기
-        }
-    }
-
-    /// CGEvent로 V키 + 지정 modifier 전송
-    private func sendPasteKey(flags: CGEventFlags) {
-        let source = CGEventSource(stateID: .combinedSessionState)
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        else { return }
-
-        keyDown.flags = flags
-        keyUp.flags = flags
-
-        keyDown.post(tap: .cgAnnotatedSessionEventTap)
-        keyUp.post(tap: .cgAnnotatedSessionEventTap)
-    }
-
-    /// ASCII 입력 가능한 입력 소스(영어)로 전환
-    private func switchToASCIIInputSource() {
-        guard let sources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else { return }
-        for source in sources {
-            guard let categoryRef = TISGetInputSourceProperty(source, kTISPropertyInputSourceCategory) else { continue }
-            let category = Unmanaged<CFString>.fromOpaque(categoryRef).takeUnretainedValue() as String
-            guard category == kTISCategoryKeyboardInputSource as String else { continue }
-
-            guard let asciiRef = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsASCIICapable) else { continue }
-            let isASCII = Unmanaged<CFBoolean>.fromOpaque(asciiRef).takeUnretainedValue()
-            if CFBooleanGetValue(isASCII) {
-                TISSelectInputSource(source)
-                return
-            }
-        }
     }
 
     // MARK: - Permission Check

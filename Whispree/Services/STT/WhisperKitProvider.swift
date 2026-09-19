@@ -8,6 +8,27 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
     }
 
     private var whisperKit: WhisperKit?
+    private let downloadProgressHandler: (@Sendable (Double) -> Void)?
+
+    init(downloadProgressHandler: (@Sendable (Double) -> Void)? = nil) {
+        self.downloadProgressHandler = downloadProgressHandler
+    }
+
+    static let modelRepo = "argmaxinc/whisperkit-coreml"
+    static let modelRevision = "0f63a7800b00dd0226abd051b906c246e1907482"
+    static let modelVariant = "openai_whisper-large-v3_turbo"
+    static let tokenizerRepo = "openai/whisper-large-v3"
+    static let tokenizerRevision = "06f233fe06e710322aca913c1bc4249a0d71fce1"
+
+    static var pinnedModelDownloadBase: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Whispree/PinnedModels/whisperkit/\(modelRevision)", isDirectory: true)
+    }
+
+    static var pinnedTokenizerDownloadBase: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Whispree/PinnedModels/whisper-tokenizer/\(tokenizerRevision)", isDirectory: true)
+    }
 
     func validate() -> ProviderValidation {
         guard let whisperKit else {
@@ -19,15 +40,51 @@ final class WhisperKitProvider: STTProvider, @unchecked Sendable {
     }
 
     func setup() async throws {
+        downloadProgressHandler?(0)
+
+        // WhisperKit's convenience downloader follows the repository's mutable
+        // main branch. Resolve both the CoreML model and tokenizer at reviewed
+        // immutable commits, then initialize WhisperKit from local folders only.
+        let modelDownloader = ModelDownloader(config: ModelDownloadConfig(
+            downloadBase: Self.pinnedModelDownloadBase.path,
+            modelRepo: Self.modelRepo,
+            revision: Self.modelRevision
+        ))
+        let modelRoot = try await modelDownloader.resolveRepo(
+            patterns: ["\(Self.modelVariant)/*"],
+            progressCallback: { [downloadProgressHandler] progress in
+                downloadProgressHandler?(min(0.98, max(0, progress.fractionCompleted) * 0.98))
+            }
+        )
+        downloadProgressHandler?(0.98)
+        let modelFolder = modelRoot.appendingPathComponent(Self.modelVariant)
+
+        let tokenizerDownloader = ModelDownloader(config: ModelDownloadConfig(
+            downloadBase: Self.pinnedTokenizerDownloadBase.path,
+            modelRepo: Self.tokenizerRepo,
+            revision: Self.tokenizerRevision
+        ))
+        let tokenizerFolder = try await tokenizerDownloader.resolveRepo(
+            patterns: ["*.json", "*.txt"],
+            progressCallback: { [downloadProgressHandler] progress in
+                let tokenizerFraction = min(1, max(0, progress.fractionCompleted))
+                downloadProgressHandler?(0.98 + tokenizerFraction * 0.02)
+            }
+        )
+
         let config = WhisperKitConfig(
-            model: "openai_whisper-large-v3_turbo",
+            model: Self.modelVariant,
+            modelFolder: modelFolder.path,
+            tokenizerFolder: tokenizerFolder,
             computeOptions: ModelComputeOptions(
                 audioEncoderCompute: .cpuAndNeuralEngine,
                 textDecoderCompute: .cpuAndNeuralEngine
             ),
-            load: true
+            load: true,
+            download: false
         )
         whisperKit = try await WhisperKit(config)
+        downloadProgressHandler?(1)
     }
 
     func teardown() async {

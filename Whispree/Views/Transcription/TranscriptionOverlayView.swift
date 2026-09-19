@@ -1,24 +1,12 @@
-import KeyboardShortcuts
 import SwiftUI
 
 struct TranscriptionOverlayView: View {
     @EnvironmentObject var appState: AppState
 
-    /// 녹음 중 thinking pause 상태인가? (UI 전환 기준)
     private var isThinkingPauseActive: Bool {
         appState.settings.vadEnabled &&
             appState.transcriptionState == .recording &&
             appState.isThinkingPause
-    }
-
-    /// 스크린샷 전달 토글 플래시 표시 중?
-    private var isHandoffFlashActive: Bool {
-        appState.handoffToggleFlash != nil
-    }
-
-    /// 현재 VLM 지원 프로바이더? — 하단 안내 표시 조건.
-    private var supportsVisionHandoff: Bool {
-        appState.llmProvider?.supportsVision == true
     }
 
     var body: some View {
@@ -28,9 +16,6 @@ struct TranscriptionOverlayView: View {
                 Text(statusText)
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.35), value: isThinkingPauseActive)
-                    .animation(.easeInOut(duration: 0.35), value: isHandoffFlashActive)
                 Spacer(minLength: 0)
                 if appState.transcriptionState == .transcribing || appState.transcriptionState == .correcting {
                     ProgressView()
@@ -38,30 +23,22 @@ struct TranscriptionOverlayView: View {
                         .frame(width: 16, height: 16)
                 }
             }
+
             NeonWaveformView()
                 .frame(height: 40)
                 .opacity(waveformOpacity)
-                .animation(.easeInOut(duration: 0.4), value: isThinkingPauseActive)
-                .animation(.easeInOut(duration: 0.2), value: appState.isRecording)
 
             if appState.isRecording {
                 HStack(spacing: 12) {
                     Spacer()
-                    hotkeyBadge(label: "Stop", keys: shortcutLabel)
+                    hotkeyBadge(label: "Stop", keys: appState.settings.toggleRecordingShortcut.displayLabel)
                     hotkeyBadge(label: "Cancel", keys: "esc")
-                    if supportsVisionHandoff {
-                        hotkeyBadge(
-                            label: "Img Attach",
-                            keys: "⌥",
-                            active: appState.settings.isScreenshotPasteEnabled
-                        )
-                    }
                     Spacer()
                 }
-            } else if isForegroundQueueItemCancelable {
-                HStack(spacing: 12) {
+            } else if appState.dictationQueueSnapshot.foregroundJobSequence != nil {
+                HStack {
                     Spacer()
-                    hotkeyBadge(label: foregroundCancelLabel, keys: "esc")
+                    hotkeyBadge(label: "Cancel", keys: "esc")
                     Spacer()
                 }
             }
@@ -72,13 +49,9 @@ struct TranscriptionOverlayView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    @ViewBuilder
-    private func hotkeyBadge(label: String, keys: String, active: Bool = false) -> some View {
+    private func hotkeyBadge(label: String, keys: String) -> some View {
         HStack(spacing: 4) {
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(active ? DesignTokens.accentPrimary : .secondary)
-                .animation(.easeInOut(duration: 0.25), value: active)
+            Text(label).font(.caption2).foregroundStyle(.secondary)
             Text(keys)
                 .font(.caption2.monospaced())
                 .foregroundStyle(.tertiary)
@@ -89,33 +62,10 @@ struct TranscriptionOverlayView: View {
         }
     }
 
-    private var shortcutLabel: String {
-        appState.settings.toggleRecordingShortcut.displayLabel
-    }
-
-    private var isForegroundQueueItemCancelable: Bool {
-        appState.dictationQueueSnapshot.foregroundJobSequence != nil &&
-            (appState.transcriptionState == .transcribing || appState.transcriptionState == .correcting)
-    }
-
-    private var foregroundCancelLabel: String {
-        if let sequence = appState.dictationQueueSnapshot.foregroundJobSequence {
-            return "Cancel #\(sequence)"
-        }
-        return "Cancel"
-    }
-
     private var statusText: String {
-        if let handoff = appState.handoffToggleFlash {
-            return handoff ? String(localized: "Img Attach ON") : String(localized: "Img Attach OFF")
-        }
-        if isThinkingPauseActive {
-            return String(localized: "무음 스킵 중")
-        }
-        let activeQueueCount = appState.dictationQueueSnapshot.activeCount
-        if appState.isRecording, activeQueueCount > 0 {
-            return "Recording · \(activeQueueCount) pending"
-        }
+        if isThinkingPauseActive { return String(localized: "무음 스킵 중") }
+        let active = appState.dictationQueueSnapshot.activeCount
+        if appState.isRecording, active > 0 { return "Recording · \(active) pending" }
         if !appState.isRecording, appState.dictationQueueSnapshot.processingCount > 1 {
             return "Processing \(appState.dictationQueueSnapshot.processingCount) items"
         }
@@ -129,43 +79,23 @@ struct TranscriptionOverlayView: View {
 
     @ViewBuilder
     private var statusIcon: some View {
-        Group {
-            if let handoff = appState.handoffToggleFlash {
-                // 스크린샷 전달 토글 플래시
-                Image(systemName: handoff ? "photo.fill.on.rectangle.fill" : "photo.on.rectangle")
-                    .foregroundStyle(handoff ? DesignTokens.accentPrimary : .secondary)
-            } else if isThinkingPauseActive {
-                // Thinking pause: "무음 스킵 중" — waveform.slash (secondary), gentle pulse
-                Image(systemName: "waveform.slash")
-                    .foregroundStyle(.secondary)
-                    .symbolEffect(.pulse, options: .repeating.speed(0.6))
-            } else {
-                switch appState.transcriptionState {
-                    case .recording:
-                        Image(systemName: "mic.fill")
-                            .foregroundStyle(DesignTokens.semanticColors(for: .danger).foreground)
-                            .symbolEffect(.pulse)
-                    case .transcribing:
-                        Image(systemName: "text.bubble")
-                            .foregroundStyle(DesignTokens.semanticColors(for: .warning).foreground)
-                    case .correcting:
-                        Image(systemName: "text.badge.checkmark")
-                            .foregroundStyle(DesignTokens.accentPrimary)
-                    case .inserting:
-                        Image(systemName: "checkmark.circle")
-                            .foregroundStyle(DesignTokens.semanticColors(for: .success).foreground)
-                    case .selectingScreenshots:
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .foregroundStyle(DesignTokens.accentPrimary)
-                    case .idle:
-                        Image(systemName: "mic")
-                            .foregroundStyle(.secondary)
-                }
-            }
+        switch appState.transcriptionState {
+        case .recording:
+            Image(systemName: isThinkingPauseActive ? "waveform.slash" : "mic.fill")
+                .foregroundStyle(isThinkingPauseActive ? .secondary : DesignTokens.semanticColors(for: .danger).foreground)
+        case .transcribing:
+            Image(systemName: "text.bubble")
+                .foregroundStyle(DesignTokens.semanticColors(for: .warning).foreground)
+        case .correcting:
+            Image(systemName: "text.badge.checkmark")
+                .foregroundStyle(DesignTokens.accentPrimary)
+        case .inserting:
+            Image(systemName: "checkmark.circle")
+                .foregroundStyle(DesignTokens.semanticColors(for: .success).foreground)
+        case .idle:
+            Image(systemName: "mic")
+                .foregroundStyle(.secondary)
         }
-        .font(.caption)
-        .contentTransition(.symbolEffect(.replace))
-        .animation(.easeInOut(duration: 0.3), value: isThinkingPauseActive)
     }
 }
 
