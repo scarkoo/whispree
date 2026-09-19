@@ -28,6 +28,9 @@ final class LocalTextProvider: LLMProvider {
     }
 
     func setup() async throws {
+        guard !revision.isEmpty else {
+            throw LLMError.correctionFailed("고정된 모델 revision이 없어 로드를 거부했습니다.")
+        }
         MLXMemoryControl.configureInteractiveCacheLimit()
         let config = ModelConfiguration(id: modelId, revision: revision)
         modelContainer = try await LLMModelFactory.shared.loadContainer(
