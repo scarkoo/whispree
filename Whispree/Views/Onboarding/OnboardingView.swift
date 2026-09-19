@@ -55,8 +55,8 @@ struct OnboardingView: View {
             .background(DesignTokens.surfaceBackgroundView(role: .card))
 
             VStack(alignment: .leading, spacing: 8) {
-                Label("WhisperKit / MLX Audio 로컬 STT", systemImage: "checkmark.shield")
-                Label("MLX 로컬 LLM 교정", systemImage: "checkmark.shield")
+                Label("WhisperKit Large V3 Turbo 고정 로컬 STT", systemImage: "checkmark.shield")
+                Label("Qwen3 8B 고정 로컬 LLM 교정", systemImage: "checkmark.shield")
                 Label("화면 캡처 · Cloud API · Codex/OAuth 없음", systemImage: "checkmark.shield")
             }
             .font(.subheadline)
@@ -67,7 +67,6 @@ struct OnboardingView: View {
             Spacer()
 
             Button("시작하기") {
-                appState.settings.sttProviderType = .whisperKit
                 appState.settings.llmProviderType = .local
                 appState.settings.isLLMEnabled = true
                 onComplete()
