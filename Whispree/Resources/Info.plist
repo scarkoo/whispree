@@ -14,7 +14,5 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Whispree needs microphone access to record your voice for local transcription.</string>
-        </dict>
-    </array>
 </dict>
 </plist>
